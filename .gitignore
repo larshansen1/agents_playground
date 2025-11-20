@@ -1,0 +1,85 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Certificates and keys
+certs/
+*.pem
+*.key
+*.crt
+*.csr
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+coverage.xml
+*.coveragerc
+test-results.xml
+.pytest/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Docker volumes (local data - never commit!)
+postgres_data/
+qdrant_data/
+open_webui_data/
+tempo_data/
+grafana_data/
+
+# Monitoring/Observability
+monitoring/*.db
+*.trace
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+.*.swp
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Database files (local SQLite if any)
+*.db
+*.sqlite
+*.sqlite3
+

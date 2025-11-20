@@ -1,0 +1,129 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openwebui}
+      POSTGRES_USER: ${POSTGRES_USER:-openwebui}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U openwebui" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "3001:8080" # Changed from 3000 to avoid Grafana conflict
+    environment:
+      - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
+      - OPENAI_API_KEY=${OPENROUTER_API_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-openwebui}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openwebui}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - ENABLE_SIGNUP=true
+      - DEFAULT_USER_ROLE=user
+      - ENABLE_OLLAMA_API=false
+      - VECTOR_DB=qdrant
+      - QDRANT_URI=http://qdrant:6333
+      - TASK_API_URL=https://host.docker.internal:8443
+      - CA_CERT_PATH=/app/backend/data/certs/ca-cert.pem
+      - CLIENT_CERT_PATH=/app/backend/data/certs/client-cert.pem
+      - CLIENT_KEY_PATH=/app/backend/data/certs/client-key.pem
+    volumes:
+      - open_webui_data:/app/backend/data
+      - ./certs:/app/backend/data/certs:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+
+  task-api:
+    build: .
+    container_name: task-api
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-openwebui}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openwebui}
+      - POSTGRES_USER=${POSTGRES_USER:-openwebui}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-openwebui}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
+      - OPENAI_MODEL=${OPENAI_MODEL:-openai/gpt-4o-mini}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  task-worker:
+    build: .
+    container_name: task-worker
+    command: python -m app.worker
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-openwebui}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openwebui}
+      - POSTGRES_USER=${POSTGRES_USER:-openwebui}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-openwebui}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
+      - OPENAI_MODEL=google/gemini-2.5-flash
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Tempo - Distributed Tracing Backend
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    user: "0" # Run as root to fix permission issues
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./monitoring/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    ports:
+      - "3200:3200" # Tempo HTTP
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3002:3000" # Changed to 3002 to avoid conflict with Open WebUI
+    depends_on:
+      - tempo
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  open_webui_data:
+  tempo_data:
+  grafana_data:
