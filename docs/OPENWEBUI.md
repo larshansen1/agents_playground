@@ -221,12 +221,12 @@ sequenceDiagram
 
 ## Key Features
 
-✅ **mTLS Authentication**: Secure client certificate authentication  
-✅ **Auto-Wait**: Automatically polls for completion  
-✅ **Smart Polling**: Configurable interval and timeout  
-✅ **Formatted Output**: Pretty formatting for summaries  
-✅ **Error Handling**: Clear error messages  
-✅ **Backward Compatible**: Works with existing @queue commands  
+✅ **mTLS Authentication**: Secure client certificate authentication
+✅ **Auto-Wait**: Automatically polls for completion
+✅ **Smart Polling**: Configurable interval and timeout
+✅ **Formatted Output**: Pretty formatting for summaries
+✅ **Error Handling**: Clear error messages
+✅ **Backward Compatible**: Works with existing @queue commands
 
 ## Security Notes
 

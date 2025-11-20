@@ -12,70 +12,71 @@ In another terminal, create/update tasks and see the updates here in real-time.
 """
 
 import asyncio
-import websockets
-import ssl
 import json
+import ssl
 import sys
 
+import websockets
 
-async def listen_to_updates():
+
+async def listen_to_updates():  # noqa: PLR0915
     """Connect to WebSocket and listen for task updates."""
     # Setup SSL context for client certificate
     ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    ssl_context.load_cert_chain('certs/client-cert.pem', 'certs/client-key.pem')
-    ssl_context.load_verify_locations('certs/ca-cert.pem')
-    
+    ssl_context.load_cert_chain("certs/client-cert.pem", "certs/client-key.pem")
+    ssl_context.load_verify_locations("certs/ca-cert.pem")
+
     uri = "wss://localhost:8443/ws"
-    
+
     print("=" * 60)
     print("WebSocket Client - Task Status Updates")
     print("=" * 60)
     print(f"\nConnecting to {uri}...")
-    
+
     try:
         async with websockets.connect(uri, ssl=ssl_context) as websocket:
             print("✓ Connected to WebSocket endpoint!")
             print("\nListening for task updates... (Press Ctrl+C to stop)\n")
-            
+
             # Send periodic pings to keep connection alive
             async def send_ping():
                 while True:
                     await asyncio.sleep(30)
                     await websocket.send("ping")
-            
+
             ping_task = asyncio.create_task(send_ping())
-            
+
             try:
                 while True:
                     # Wait for messages from server
                     message = await websocket.recv()
-                    
+
                     # Handle pong response
                     if message == "pong":
                         continue
-                    
+
                     # Parse and display task update
                     try:
                         data = json.loads(message)
                         print("-" * 60)
-                        print(f"Task Update Received:")
+                        print("Task Update Received:")
                         print(f"  Task ID: {data['task_id']}")
                         print(f"  Type: {data['type']}")
                         print(f"  Status: {data['status']}")
-                        if data.get('output'):
+                        if data.get("output"):
                             print(f"  Output: {json.dumps(data['output'], indent=2)}")
-                        if data.get('error'):
+                        if data.get("error"):
                             print(f"  Error: {data['error']}")
                         print(f"  Updated: {data['updated_at']}")
                         print("-" * 60)
                         print()
                     except json.JSONDecodeError:
                         print(f"Received non-JSON message: {message}")
-            
+
             except asyncio.CancelledError:
                 ping_task.cancel()
                 raise
-    
+
     except websockets.exceptions.ConnectionClosed:
         print("\n✗ Connection closed by server")
     except ConnectionRefusedError:

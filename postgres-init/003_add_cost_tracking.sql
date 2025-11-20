@@ -14,7 +14,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_cost ON tasks(total_cost) WHERE total_cost 
 CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at);
 
 -- Verify the changes
-SELECT column_name, data_type, is_nullable 
-FROM information_schema.columns 
-WHERE table_name = 'tasks' 
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'tasks'
 ORDER BY ordinal_position;

@@ -1,0 +1,23 @@
+# Development dependencies for code quality and testing
+# Install: pip install -r requirements-dev.txt
+
+# Linting and Formatting
+ruff>=0.8.0
+
+# Type Checking
+mypy>=1.13.0
+types-requests>=2.31.0
+types-PyYAML>=6.0.12
+
+# Security Scanning
+bandit[toml]>=1.7.10
+
+# Pre-commit Hooks
+pre-commit>=4.0.0
+
+# Testing (already in requirements.txt but kept here for clarity)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+httpx>=0.24.0
+faker>=19.0.0

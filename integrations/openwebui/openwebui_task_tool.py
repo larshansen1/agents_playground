@@ -7,13 +7,16 @@ description: Queue delegation system with mTLS support and real-time UI updates.
 requirements: requests, asyncio
 """
 
-import os
-import json
+import asyncio
 import base64
+import hashlib
+import json
+import os
 import re
 import time
-import asyncio
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import Any
+
 import requests
 from pydantic import BaseModel, Field
 
@@ -60,26 +63,29 @@ class Tools:
     def __init__(self):
         self.valves = self.Valves()
 
-    def _get_ssl_config(self) -> Dict[str, Any]:
+    def _get_ssl_config(self) -> dict[str, Any]:
         """Get SSL configuration for mTLS requests."""
         config = {
             "cert": (self.valves.client_cert_path, self.valves.client_key_path),
         }
 
+        # Explicitly cast to Any to avoid Mypy strict check on dict values
+        config_dict: dict[str, Any] = config
+
         if self.valves.verify_ssl:
-            config["verify"] = self.valves.ca_cert_path
+            config_dict["verify"] = self.valves.ca_cert_path
         else:
-            config["verify"] = False
+            config_dict["verify"] = False
 
-        return config
+        return config_dict
 
-    def _read_file(self, file_path: str, file_name: str) -> Optional[Dict[str, Any]]:
+    def _read_file(self, file_path: str, file_name: str) -> dict[str, Any] | None:
         """Read file content from disk."""
         try:
-            if not os.path.exists(file_path):
+            if not Path(file_path).exists():
                 return {"error": f"File not found: {file_path}"}
 
-            file_size = os.path.getsize(file_path)
+            file_size = Path(file_path).stat().st_size
             max_bytes = self.valves.max_file_size_mb * 1024 * 1024
 
             if file_size > max_bytes:
@@ -90,7 +96,7 @@ class Tools:
                 }
 
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
+                with Path(file_path).open(encoding="utf-8") as f:
                     content = f.read()
                 return {
                     "name": file_name,
@@ -100,7 +106,7 @@ class Tools:
                     "type": "text",
                 }
             except (UnicodeDecodeError, Exception):
-                with open(file_path, "rb") as f:
+                with Path(file_path).open("rb") as f:
                     content = base64.b64encode(f.read()).decode("ascii")
                 return {
                     "name": file_name,
@@ -120,22 +126,21 @@ class Tools:
             for word in ["summarize", "summary", "tldr", "key points", "overview"]
         ):
             return "summarize_document"
-        elif any(
-            word in message_lower
-            for word in ["analyze", "table", "schema", "structure", "data"]
+        if any(
+            word in message_lower for word in ["analyze", "table", "schema", "structure", "data"]
         ):
             return "analyze_table"
-        elif any(
+        if any(
             word in message_lower
             for word in ["compare", "versus", "vs", "options", "choice", "evaluate"]
         ):
             return "compare_options"
         return "summarize_document"
 
-    def _format_json_output(self, data: dict) -> str:
+    def _format_json_output(self, data: dict) -> str:  # noqa: PLR0912
         """Format structured output nicely."""
         lines = []
-        
+
         # Always show summary if present (even if it's the only field)
         if "summary" in data:
             lines.append("📝 **SUMMARY:**")
@@ -145,23 +150,23 @@ class Tools:
                 summary = summary.replace("```json", "").replace("```", "").strip()
             lines.append(summary)
             lines.append("")
-            
-        if "key_points" in data and data["key_points"]:
+
+        if data.get("key_points"):
             lines.append("🔑 **KEY POINTS:**")
             for i, point in enumerate(data["key_points"], 1):
                 lines.append(f"{i}. {point}")
             lines.append("")
-        if "missing_info" in data and data["missing_info"]:
+        if data.get("missing_info"):
             lines.append("❓ **MISSING INFORMATION:**")
             for i, info in enumerate(data["missing_info"], 1):
                 lines.append(f"{i}. {info}")
             lines.append("")
-        if "suggested_next_questions" in data and data["suggested_next_questions"]:
+        if data.get("suggested_next_questions"):
             lines.append("💡 **SUGGESTED QUESTIONS:**")
             for i, question in enumerate(data["suggested_next_questions"], 1):
                 lines.append(f"{i}. {question}")
             lines.append("")
-        if "risks" in data and data["risks"]:
+        if data.get("risks"):
             lines.append("⚠️ **RISKS:**")
             for risk in data["risks"]:
                 if isinstance(risk, dict):
@@ -175,37 +180,31 @@ class Tools:
             lines.append("✅ **RECOMMENDATION:**")
             lines.append(data["recommendation"])
             lines.append("")
-        
+
         # Note field (for non-JSON responses)
-        if "note" in data and data["note"]:
-            lines.append(f"ℹ️ *{data['note']}*")
+        if data.get("note"):
+            lines.append(f"ℹ️ *{data['note']}*")  # noqa: RUF001
             lines.append("")
-            
+
         # Cost display (if available in the output or passed separately)
-        # Note: The tool usually receives the full task object in _format_task_result, 
-        # but this method only gets the 'output' part. 
+        # Note: The tool usually receives the full task object in _format_task_result,
+        # but this method only gets the 'output' part.
         # We'll handle cost in _format_task_result instead.
-        
+
         # Fallback if still empty (prevent silent failures)
         if not lines:
             return json.dumps(data, indent=2)
-            
+
         return "\n".join(lines)
 
-    def _get_most_recent_file(
-        self, __files__: List[dict], instruction: str
-    ) -> Optional[dict]:
+    def _get_most_recent_file(self, __files__: list[dict], instruction: str) -> dict | None:
         """Get the most relevant file from the list."""
         if not __files__:
             return None
         instruction_lower = instruction.lower()
         for file_obj in reversed(__files__):
-            file_name = (
-                file_obj.get("name") or file_obj.get("file", {}).get("name") or ""
-            ).lower()
-            if any(
-                keyword in instruction_lower for keyword in file_name.split(".")[:1]
-            ):
+            file_name = (file_obj.get("name") or file_obj.get("file", {}).get("name") or "").lower()
+            if any(keyword in instruction_lower for keyword in file_name.split(".")[:1]):
                 return file_obj
         return __files__[-1]
 
@@ -227,24 +226,22 @@ class Tools:
             f"**Created:** {task.get('created_at', 'N/A')[:19]}",
             "",
         ]
-        
-        # Add cost info at the TOP if available (before main content)
-        print(f"[DEBUG] total_cost value: {task.get('total_cost')}")
-        print(f"[DEBUG] total_cost type: {type(task.get('total_cost'))}")
-        print(f"[DEBUG] Condition check: {task.get('total_cost') is not None and task.get('total_cost') > 0}")
-        
-        if task.get("total_cost") is not None and task.get("total_cost") > 0:
+
+        total_cost = task.get("total_cost")
+        if total_cost is not None and float(total_cost) > 0:
             print("[DEBUG] Adding cost info to result!")
             result.append("**💰 COST INFORMATION - MUST BE PRESENTED TO USER:**")
             result.append(f"💰 **Cost:** ${float(task['total_cost']):.6f}")
             if task.get("input_tokens") is not None and task.get("output_tokens") is not None:
-                result.append(f"📊 **Tokens:** {task['input_tokens']:,} input / {task['output_tokens']:,} output")
+                result.append(
+                    f"📊 **Tokens:** {task['input_tokens']:,} input / {task['output_tokens']:,} output"
+                )
             if task.get("model_used"):
                 result.append(f"🤖 **Model:** {task['model_used']}")
             result.append("")
         else:
-            print(f"[DEBUG] Cost info NOT added. Condition failed!")
-        
+            print("[DEBUG] Cost info NOT added. Condition failed!")
+
         result.append("---")
         result.append("")
 
@@ -255,36 +252,22 @@ class Tools:
             result.append("")
             formatted = self._format_json_output(task["output"])
             result.append(formatted)
-                    
+
         elif task["status"] in ["pending", "in_progress"]:
-            result.append(f"⏳ Still processing...")
+            result.append("⏳ Still processing...")
 
         if task.get("error"):
             result.append(f"\n❌ **ERROR:** {task['error']}")
 
         return "\n".join(result)
 
-    async def _emit_status(
-        self, 
-        emitter: Any, 
-        message: str, 
-        done: bool = False
-    ):
+    async def _emit_status(self, emitter: Any, message: str, done: bool = False):
         """Helper to safely send UI updates via the event emitter."""
         if emitter:
-            await emitter({
-                "type": "status",
-                "data": {
-                    "description": message,
-                    "done": done
-                }
-            })
+            await emitter({"type": "status", "data": {"description": message, "done": done}})
 
     async def wait_for_task_completion(
-        self, 
-        task_id: str, 
-        emitter: Any = None,
-        initial_check: bool = False
+        self, task_id: str, emitter: Any = None, initial_check: bool = False
     ) -> str:
         """
         Async polling loop that updates the UI while waiting.
@@ -307,16 +290,22 @@ class Tools:
                 )
                 response.raise_for_status()
                 task = response.json()
-                
+
                 # DEBUG: Log the full response to see what we actually get
                 print(f"[DEBUG] API URL: {self.valves.task_api_url}/tasks/{task_id}")
                 print(f"[DEBUG] Response status: {response.status_code}")
                 print(f"[DEBUG] Response keys: {list(task.keys())}")
-                print(f"[DEBUG] Cost fields in response: total_cost={task.get('total_cost')}, input_tokens={task.get('input_tokens')}, output_tokens={task.get('output_tokens')}, model_used={task.get('model_used')}")
+                print(
+                    f"[DEBUG] Cost fields in response: total_cost={task.get('total_cost')}, input_tokens={task.get('input_tokens')}, output_tokens={task.get('output_tokens')}, model_used={task.get('model_used')}"
+                )
 
                 # If complete, return result immediately
                 if task["status"] in ["completed", "done", "failed", "error"]:
-                    status_msg = "Task Completed!" if task["status"] in ["completed", "done"] else "Task Failed"
+                    status_msg = (
+                        "Task Completed!"
+                        if task["status"] in ["completed", "done"]
+                        else "Task Failed"
+                    )
                     await self._emit_status(emitter, status_msg, True)
                     return self._format_task_result(task)
 
@@ -327,8 +316,10 @@ class Tools:
 
                 # Not complete yet: update UI status
                 poll_count += 1
-                await self._emit_status(emitter, f"Remote Status: {task['status'].title()}... ({poll_count})", False)
-                
+                await self._emit_status(
+                    emitter, f"Remote Status: {task['status'].title()}... ({poll_count})", False
+                )
+
                 # Async sleep (non-blocking)
                 await asyncio.sleep(self.valves.poll_interval_seconds)
 
@@ -337,47 +328,40 @@ class Tools:
             return f"⏰ Task {task_id} still processing after {self.valves.max_wait_seconds}s\n\nCheck status: @queue status {task_id}"
 
         except requests.exceptions.RequestException as e:
-            await self._emit_status(emitter, f"Network Error: {str(e)}", True)
-            return f"❌ ERROR checking task: {str(e)}"
+            await self._emit_status(emitter, f"Network Error: {e!s}", True)
+            return f"❌ ERROR checking task: {e!s}"
         except Exception as e:
-            await self._emit_status(emitter, f"Error: {str(e)}", True)
-            return f"❌ UNEXPECTED ERROR: {str(e)}"
+            await self._emit_status(emitter, f"Error: {e!s}", True)
+            return f"❌ UNEXPECTED ERROR: {e!s}"
 
-    async def _create_task_async(
-        self, 
-        task_type: str, 
-        description: str, 
-        files_to_process: List[dict],
-        emitter: Any = None
+    async def _create_task_async(  # noqa: PLR0912
+        self, task_type: str, description: str, files_to_process: list[dict], emitter: Any = None
     ) -> str:
         """
         Creates a task asynchronously and then waits for it.
         """
         await self._emit_status(emitter, "Preparing files...", False)
-        
-        task_input = {"description": description}
-        
+
+        task_input: dict[str, Any] = {"description": description}
+
         # Inject user context for cost tracking
         try:
             # __user__ is injected by Open WebUI runtime
-            user_email = __user__.get("email", "anonymous")
-        except NameError:
+            # Use globals() to access it safely or default to anonymous
+            user_dict = globals().get("__user__", {})
+            user_email = user_dict.get("email", "anonymous")
+        except (NameError, AttributeError):
             user_email = "anonymous"
-            
-        import hashlib
+
         user_id_hash = hashlib.sha256(user_email.encode()).hexdigest()
         task_input["_user_id_hash"] = user_id_hash
-        
+
         files_data = []
 
         # Process files
         for file_obj in files_to_process:
             file_id = file_obj.get("id") or file_obj.get("file", {}).get("id")
-            file_name = (
-                file_obj.get("name")
-                or file_obj.get("file", {}).get("name")
-                or "unknown"
-            )
+            file_name = file_obj.get("name") or file_obj.get("file", {}).get("name") or "unknown"
             file_path = file_obj.get("file", {}).get("path")
             if not file_path:
                 file_path = f"{self.valves.upload_dir}/{file_id}_{file_name}"
@@ -385,14 +369,13 @@ class Tools:
             file_data = self._read_file(file_path, file_name)
             if file_data and "content" in file_data:
                 files_data.append({"id": file_id, "path": file_path, **file_data})
-                
+
                 # For summarize_document, we need to pass the content in a specific way
                 if task_type == "summarize_document":
-                    import base64
                     # If it's a PDF or binary, pass as base64
                     if file_name.lower().endswith(".pdf"):
-                        with open(file_path, "rb") as f:
-                            encoded = base64.b64encode(f.read()).decode('utf-8')
+                        with Path(file_path).open("rb") as f:
+                            encoded = base64.b64encode(f.read()).decode("utf-8")
                             task_input["file_content"] = encoded
                             task_input["filename"] = file_name
                     else:
@@ -419,7 +402,7 @@ class Tools:
         # Create task via API
         try:
             await self._emit_status(emitter, "Uploading to Backend...", False)
-            
+
             response = await asyncio.to_thread(
                 requests.post,
                 f"{self.valves.task_api_url}/tasks",
@@ -438,13 +421,10 @@ class Tools:
 
         except requests.exceptions.RequestException as e:
             await self._emit_status(emitter, "Connection Failed", True)
-            return f"❌ ERROR creating task: {str(e)}\n\nMake sure the API is running and mTLS certificates are configured correctly."
+            return f"❌ ERROR creating task: {e!s}\n\nMake sure the API is running and mTLS certificates are configured correctly."
 
     async def at_queue(
-        self, 
-        instruction: str, 
-        __event_emitter__: Any = None,
-        __files__: List[dict] = []
+        self, instruction: str, __event_emitter__: Any = None, __files__: list[dict] | None = None
     ) -> str:
         """
         Main entry point for @queue commands (ASYNC).
@@ -468,16 +448,14 @@ class Tools:
             )
 
         # Create new task
-        most_recent_file = self._get_most_recent_file(__files__, instruction)
+        files = __files__ or []
+        most_recent_file = self._get_most_recent_file(files, instruction)
         if not most_recent_file:
             return "❌ Error: No file attached. Please attach a file to process."
 
         task_type = self._infer_task_type(instruction)
-        
+
         # Call the Async internal creator
         return await self._create_task_async(
-            task_type, 
-            instruction, 
-            [most_recent_file], 
-            emitter=__event_emitter__
+            task_type, instruction, [most_recent_file], emitter=__event_emitter__
         )

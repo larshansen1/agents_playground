@@ -1,19 +1,20 @@
 """Pytest configuration and fixtures."""
+
 import asyncio
+import uuid
+from collections.abc import AsyncGenerator, Generator
+
 import pytest
 import pytest_asyncio
-from typing import AsyncGenerator, Generator
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.pool import StaticPool
-from sqlalchemy import JSON, Column, String, Text, DateTime, func
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import JSON, Column, DateTime, String, Text, func
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
-from httpx import AsyncClient
-import uuid
+from sqlalchemy.pool import StaticPool
 
-from app.main import app
 from app.database import get_db
-
+from app.main import app
 
 # Test database URL (in-memory SQLite for speed)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -24,8 +25,9 @@ TestBase = declarative_base()
 
 class TestTask(TestBase):
     """Test Task model compatible with SQLite."""
+
     __tablename__ = "tasks"
-    
+
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     type = Column(String, nullable=False)
     status = Column(String, nullable=False, default="pending")
@@ -34,7 +36,7 @@ class TestTask(TestBase):
     error = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
+
     # Cost tracking fields
     user_id_hash = Column(String(64))
     model_used = Column(String(100))
@@ -61,15 +63,15 @@ async def async_engine():
         poolclass=StaticPool,
         echo=False,
     )
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(TestBase.metadata.create_all)
-    
+
     yield engine
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(TestBase.metadata.drop_all)
-    
+
     await engine.dispose()
 
 
@@ -81,7 +83,7 @@ async def async_session(async_engine) -> AsyncGenerator[AsyncSession, None]:
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    
+
     async with async_session_maker() as session:
         yield session
 
@@ -89,19 +91,15 @@ async def async_session(async_engine) -> AsyncGenerator[AsyncSession, None]:
 @pytest_asyncio.fixture
 async def client(async_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Create async HTTP client for testing."""
-    from httpx import ASGITransport
-    
+
     async def override_get_db():
         yield async_session
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test"
-    ) as ac:
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
-    
+
     app.dependency_overrides.clear()
 
 
@@ -110,7 +108,7 @@ def sample_task_data():
     """Sample task creation data."""
     return {
         "type": "summarize_document",
-        "input": {"text": "Sample document for testing purposes."}
+        "input": {"text": "Sample document for testing purposes."},
     }
 
 
@@ -119,8 +117,5 @@ def sample_task_update():
     """Sample task update data."""
     return {
         "status": "done",
-        "output": {
-            "summary": "Test summary",
-            "key_points": ["Point 1", "Point 2"]
-        }
+        "output": {"summary": "Test summary", "key_points": ["Point 1", "Point 2"]},
     }

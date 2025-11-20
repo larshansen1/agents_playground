@@ -31,7 +31,7 @@ cd agents_playground
 cp .env.example .env
 # Edit .env with your API keys
 
-# 3. Generate SSL certificates  
+# 3. Generate SSL certificates
 ./utils/generate_certs.sh
 
 # 4. Start the stack
@@ -42,6 +42,29 @@ curl http://localhost:8000/health
 ```
 
 See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
+
+## Code Quality
+
+This project uses modern Python tooling for maintaining code quality:
+
+- **🚀 Ruff** - Fast linting and formatting
+- **🔍 Mypy** - Static type checking
+- **🔒 Bandit** - Security vulnerability scanning
+- **🪝 Pre-commit** - Automated git hooks
+
+**Quick Setup:**
+```bash
+# Install development tools
+pip install -r requirements-dev.txt
+
+# Install pre-commit hooks
+pre-commit install
+
+# Run all quality checks
+make validate
+```
+
+See [docs/CODE_QUALITY.md](docs/CODE_QUALITY.md) for comprehensive setup guide and [docs/CODE_QUALITY_REPORT.md](docs/CODE_QUALITY_REPORT.md) for initial scan results.
 
 ## Architecture
 
@@ -152,7 +175,7 @@ async def monitor_tasks():
     async with websockets.connect('ws://localhost:8000/ws') as ws:
         # Keep connection alive
         await ws.send('ping')
-        
+
         # Receive updates
         while True:
             message = await ws.recv()
@@ -347,7 +370,7 @@ SELECT id, type, status, created_at FROM tasks ORDER BY created_at DESC LIMIT 10
 
 For production, consider adding:
 - **Prometheus** - Metrics collection
-- **Grafana** - Metrics visualization  
+- **Grafana** - Metrics visualization
 - **Loki** - Log aggregation
 - **Tempo** - Distributed tracing
 

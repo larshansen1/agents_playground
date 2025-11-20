@@ -1,21 +1,20 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-import time
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.config import settings
+from app.database import engine
 from app.logging_config import configure_logging, get_logger
-from app.tracing import setup_tracing
 from app.metrics import (
     app_info,
     websocket_connections_active,
     websocket_messages_sent,
 )
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import REGISTRY, generate_latest, CONTENT_TYPE_LATEST
 from app.middleware.mtls import MTLSMiddleware
 from app.routers import tasks
+from app.tracing import setup_tracing
 from app.websocket import manager
-from app.database import engine
 
 # Configure structured logging
 configure_logging(log_level="INFO", json_logs=True)
@@ -33,7 +32,7 @@ setup_tracing(
     app,
     service_name="task-api",
     use_console=True,  # Keep console for debugging
-    otlp_endpoint="tempo:4317"  # Send to Tempo
+    otlp_endpoint="tempo:4317",  # Send to Tempo
 )
 logger.info("Distributed tracing enabled: console + Tempo")
 
@@ -50,11 +49,7 @@ instrumentator = Instrumentator(
 instrumentator.instrument(app)
 
 # Set application info
-app_info.info({
-    "version": "1.0.0",
-    "name": "task-api",
-    "description": "Async task management API"
-})
+app_info.info({"version": "1.0.0", "name": "task-api", "description": "Async task management API"})
 
 # Add CORS middleware (configure as needed for your use case)
 app.add_middleware(
@@ -79,7 +74,9 @@ async def startup_event():
     """Application startup."""
     logger.info(
         "application_startup",
-        database=settings.database_url.split('@')[-1] if '@' in settings.database_url else "postgres",
+        database=settings.database_url.split("@")[-1]
+        if "@" in settings.database_url
+        else "postgres",
         websocket_manager="initialized",
         metrics_endpoint="/metrics",
     )
@@ -106,10 +103,7 @@ async def root():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
-    return Response(
-        content=generate_latest(REGISTRY),
-        media_type=CONTENT_TYPE_LATEST
-    )
+    return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")
@@ -117,13 +111,13 @@ async def health():
     """Health check endpoint."""
     ws_count = len(manager.active_connections)
     websocket_connections_active.set(ws_count)
-    
+
     logger.debug(
         "health_check",
         database="connected",
         websocket_connections=ws_count,
     )
-    
+
     return {
         "status": "healthy",
         "database": "connected",
@@ -136,23 +130,23 @@ async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time task updates."""
     await manager.connect(websocket)
     websocket_connections_active.inc()
-    
+
     logger.info(
         "websocket_connected",
         client=websocket.client.host if websocket.client else "unknown",
         total_connections=len(manager.active_connections),
     )
-    
+
     try:
         while True:
             # Keep connection alive and handle ping/pong
             data = await websocket.receive_text()
-            
+
             # Simple ping/pong for connection testing
             if data == "ping":
                 await websocket.send_text("pong")
                 websocket_messages_sent.labels(message_type="pong").inc()
-    
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         websocket_connections_active.dec()
