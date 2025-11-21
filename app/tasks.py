@@ -9,7 +9,7 @@ from openai import OpenAI
 
 from app.text_utils import extract_text_from_input
 
-PROMPTS_FILE = os.getenv("PROMPTS_FILE", "/app/app/prompts.yaml")
+PROMPTS_FILE = os.getenv("PROMPTS_FILE", str(Path(__file__).parent / "prompts.yaml"))
 
 with Path(PROMPTS_FILE).open() as f:
     SYSTEM_PROMPTS = yaml.safe_load(f)

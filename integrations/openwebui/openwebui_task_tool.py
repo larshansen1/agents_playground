@@ -1,7 +1,7 @@
 """
 title: Task Queue with mTLS (Async Push)
 author: lars
-version: 3.27
+version: 3.28
 file_handler: true
 description: Queue delegation system with mTLS support and real-time UI updates.
 requirements: requests, asyncio
@@ -247,7 +247,7 @@ class Tools:
 
         if task.get("output"):
             result.append(
-                "**IMPORTANT: Present ALL sections below to the user, including Missing Information and Suggested Questions.**"
+                "**IMPORTANT: Present ALL sections below to the user in exact order, including Missing Information and Suggested Questions.**"
             )
             result.append("")
             formatted = self._format_json_output(task["output"])

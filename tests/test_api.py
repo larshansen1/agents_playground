@@ -42,7 +42,12 @@ class TestTaskEndpoints:
         assert UUID(data["id"])  # Valid UUID
         assert data["type"] == sample_task_data["type"]
         assert data["status"] == "pending"
-        assert data["input"] == sample_task_data["input"]
+
+        # Input might have trace context injected, so we check if original input is present
+        response_input = data["input"].copy()
+        response_input.pop("_trace_context", None)
+        assert response_input == sample_task_data["input"]
+
         assert data["output"] is None
         assert data["error"] is None
         assert "created_at" in data

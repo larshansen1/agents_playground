@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     ssl_server_cert: str | None = None
     ssl_server_key: str | None = None
 
+    # Observability
+    otlp_endpoint: str | None = Field(default=None, validation_alias="OTLP_ENDPOINT")
+
     # Application settings
     app_host: str = "0.0.0.0"  # nosec B104
     app_port: int = 8443
@@ -48,6 +51,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 settings = Settings()

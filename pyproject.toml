@@ -145,6 +145,11 @@ addopts = [
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "asyncio: Asyncio tests",
+]
 
 [tool.coverage.run]
 source = ["app"]
@@ -168,6 +173,7 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
+fail_under = 50
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "venv"]

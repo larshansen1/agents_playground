@@ -1,5 +1,11 @@
 """Pytest configuration and fixtures."""
 
+import os
+
+# Set environment variables for testing before importing app modules
+os.environ["POSTGRES_PASSWORD"] = "test"
+os.environ["OPENROUTER_API_KEY"] = "test"
+
 import asyncio
 import uuid
 from collections.abc import AsyncGenerator, Generator

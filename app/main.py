@@ -32,7 +32,7 @@ setup_tracing(
     app,
     service_name="task-api",
     use_console=True,  # Keep console for debugging
-    otlp_endpoint="tempo:4317",  # Send to Tempo
+    otlp_endpoint=settings.otlp_endpoint,  # Send to Tempo if configured
 )
 logger.info("Distributed tracing enabled: console + Tempo")
 
