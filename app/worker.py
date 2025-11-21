@@ -112,7 +112,7 @@ def run_worker():
         time.sleep(0.2)
 
 
-def _process_task_row(conn, cur, row):
+def _process_task_row(conn, cur, row):  # noqa: PLR0915
     """Process a single task row from the database."""
     task_id = str(row["id"])
     task_type = row["type"]
@@ -166,6 +166,19 @@ def _process_task_row(conn, cur, row):
                 # Backward compatibility - treat entire result as output
                 output = result
                 usage = None
+
+            # Inject trace ID into output for UI linking
+            current_trace_id = get_current_trace_id()
+            if current_trace_id:
+                if isinstance(output, dict):
+                    output["_trace_id"] = current_trace_id
+                elif isinstance(output, str):
+                    # If output is a string, we can't easily add a key, so we wrap it
+                    # or just rely on the UI checking input context as fallback.
+                    # But for better UX, let's try to wrap it if it looks like JSON,
+                    # otherwise we might need a separate column or just accept it.
+                    # For now, let's only inject if it's already a dict to avoid breaking changes.
+                    pass
 
             # Mark as done in DB with cost tracking
             if usage:
@@ -253,6 +266,18 @@ def _process_task_row(conn, cur, row):
                 duration_seconds=f"{task_duration:.3f}",
                 trace_id=get_current_trace_id(),
             )
+
+    # Force flush spans to ensure they're exported to Tempo immediately
+    # Without this, spans are buffered and may never be sent
+    try:
+        from opentelemetry import trace as otel_trace
+
+        provider = otel_trace.get_tracer_provider()
+        if hasattr(provider, "force_flush"):
+            provider.force_flush(timeout_millis=5000)
+            logger.debug("trace_flushed", task_id=task_id)
+    except Exception as e:
+        logger.warning("trace_flush_failed", error=str(e))
 
 
 if __name__ == "__main__":

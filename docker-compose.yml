@@ -116,10 +116,31 @@ services:
       - GF_AUTH_DISABLE_LOGIN_FORM=true
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
     ports:
       - "3002:3000" # Changed to 3002 to avoid conflict with Open WebUI
     depends_on:
       - tempo
+
+  # Management UI - Streamlit Dashboard
+  management-ui:
+    build:
+      context: ./monitoring/ui
+      dockerfile: Dockerfile
+    container_name: management-ui
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-openwebui}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openwebui}
+      - TASK_API_URL=http://task-api:8000
+      - UI_REFRESH_INTERVAL=10
+      - UI_MAX_TASKS_DISPLAY=100
+      - UI_COST_ALERT_THRESHOLD=100.0
+    ports:
+      - "8501:8501"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      task-api:
+        condition: service_started
 
 volumes:
   postgres_data:

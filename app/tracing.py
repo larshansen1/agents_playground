@@ -10,7 +10,8 @@ This module sets up tracing for the application with support for:
 import logging
 
 from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+# from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
@@ -22,7 +23,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 logger = logging.getLogger(__name__)
 
 
-def setup_tracing(
+def setup_tracing(  # noqa: PLR0915
     app, service_name: str = "task-api", use_console: bool = True, otlp_endpoint: str | None = None
 ):
     """
@@ -34,6 +35,11 @@ def setup_tracing(
         use_console: Whether to export traces to console (for development)
         otlp_endpoint: OTLP endpoint for Tempo (e.g., "http://tempo:4317")
     """
+    # Enable OpenTelemetry debug logging
+    import os
+
+    os.environ["OTEL_LOG_LEVEL"] = "debug"
+
     # Create resource with service name
     resource = Resource.create(
         {
@@ -53,17 +59,51 @@ def setup_tracing(
         logger.info(f"Tracing: Console exporter enabled for {service_name}")
 
     # Add OTLP exporter for production (Tempo)
+    # Add OTLP exporter for production (Tempo)
     if otlp_endpoint:
+        # Switch to HTTP exporter for better reliability
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+        # Ensure endpoint uses HTTP port if not specified
+        if "4317" in otlp_endpoint:
+            otlp_endpoint = otlp_endpoint.replace("4317", "4318")
+
+        if not otlp_endpoint.startswith("http"):
+            otlp_endpoint = f"http://{otlp_endpoint}/v1/traces"
+        elif not otlp_endpoint.endswith("/v1/traces"):
+            otlp_endpoint = f"{otlp_endpoint}/v1/traces"
+
         otlp_exporter = OTLPSpanExporter(
             endpoint=otlp_endpoint,
-            insecure=True,  # Use insecure for internal Docker network
         )
-        otlp_processor = BatchSpanProcessor(otlp_exporter)
+        # Use BatchSpanProcessor with aggressive flushing to ensure spans are sent
+        # even for short-lived operations
+        otlp_processor = BatchSpanProcessor(
+            otlp_exporter,
+            max_queue_size=2048,
+            schedule_delay_millis=1000,  # Flush every 1 second (default is 5s)
+            export_timeout_millis=30000,  # 30 second timeout
+            max_export_batch_size=512,
+        )
         provider.add_span_processor(otlp_processor)
-        logger.info(f"Tracing: OTLP exporter enabled, sending to {otlp_endpoint}")
+        logger.info(f"Tracing: OTLP HTTP exporter enabled, sending to {otlp_endpoint}")
 
     # Set the global tracer provider
     trace.set_tracer_provider(provider)
+
+    # Register shutdown handler to flush spans on exit
+    import atexit
+
+    def shutdown_tracing():
+        """Flush and shutdown all span processors."""
+        try:
+            provider.force_flush(timeout_millis=10000)  # Wait up to 10s for flush
+            provider.shutdown()
+            logger.info("Tracing: Spans flushed and shutdown complete")
+        except Exception as e:
+            logger.warning(f"Tracing: Shutdown error: {e}")
+
+    atexit.register(shutdown_tracing)
 
     # Auto-instrument FastAPI (only if app is provided)
     if app is not None:

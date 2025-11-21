@@ -1,0 +1,7 @@
+streamlit>=1.30.0
+plotly>=5.18.0
+pandas>=2.1.4
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.29.0
+python-dotenv>=1.0.0
+types-pytz
