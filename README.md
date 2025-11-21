@@ -41,30 +41,7 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
-
-## Code Quality
-
-This project uses modern Python tooling for maintaining code quality:
-
-- **🚀 Ruff** - Fast linting and formatting
-- **🔍 Mypy** - Static type checking
-- **🔒 Bandit** - Security vulnerability scanning
-- **🪝 Pre-commit** - Automated git hooks
-
-**Quick Setup:**
-```bash
-# Install development tools
-pip install -r requirements-dev.txt
-
-# Install pre-commit hooks
-pre-commit install
-
-# Run all quality checks
-make validate
-```
-
-See [docs/CODE_QUALITY.md](docs/CODE_QUALITY.md) for comprehensive setup guide and [docs/CODE_QUALITY_REPORT.md](docs/CODE_QUALITY_REPORT.md) for initial scan results.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow and code quality practices.
 
 ## Architecture
 
