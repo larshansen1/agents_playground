@@ -9,7 +9,7 @@ A modern, async FastAPI-based task management service with mutual TLS authentica
 - **PostgreSQL Database** - Task storage with connection pooling
 - **REST API** - Full CRUD operations for task management
 - **WebSocket Support** - Real-time task status updates
-- **Background Worker** - Async task processing with LangGraph/LangChain
+- **Background Worker** - Async task processing with OpenTelemetry instrumentation
 - **Open WebUI Integration** - Pre-built tool for chat interface
 - **Docker Compose** - Complete stack deployment
 
@@ -75,7 +75,7 @@ The docker-compose stack includes:
 | Service | Port | Description |
 |---------|------|-------------|
 | **task-api** | 8000 | FastAPI REST API with async SQLAlchemy |
-| **task-worker** | - | Background task processor (LangGraph) |
+| **task-worker** | - | Background task processor |
 | **postgres** | 5432 | PostgreSQL 18 with pgvector extension |
 | **qdrant** | 6333 | Vector database for embeddings |
 | **open-webui** | 3000 | Web UI for chat interface |
@@ -87,7 +87,7 @@ The docker-compose stack includes:
 - **PostgreSQL** - Primary database with JSONB support
 - **Pydantic Settings** - Environment-based configuration
 - **WebSockets** - Real-time bidirectional communication
-- **LangGraph/LangChain** - Agent orchestration and task execution
+- **OpenTelemetry** - Distributed tracing and metrics
 - **Qdrant** - Vector similarity search
 
 ## API Documentation
@@ -368,13 +368,14 @@ SELECT id, type, status, created_at FROM tasks ORDER BY created_at DESC LIMIT 10
 
 ## Observability
 
-For production, consider adding:
-- **Prometheus** - Metrics collection
-- **Grafana** - Metrics visualization
-- **Loki** - Log aggregation
-- **Tempo** - Distributed tracing
+The system is fully instrumented with OpenTelemetry for comprehensive observability:
 
-See the initial conversation for Grafana Stack vs ELK recommendations.
+- **OpenTelemetry**: Captures traces and metrics from API and Worker services.
+- **Tempo**: Stores distributed traces, allowing end-to-end visualization of task processing.
+- **Prometheus**: Collects metrics from the OpenTelemetry collector.
+- **Grafana**: Visualizes traces and metrics in a unified dashboard.
+
+The worker automatically creates spans for each task, including child spans for external API calls (OpenRouter), providing detailed insights into latency and errors.
 
 ## Troubleshooting
 

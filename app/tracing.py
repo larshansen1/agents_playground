@@ -10,6 +10,7 @@ This module sets up tracing for the application with support for:
 import logging
 
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
@@ -53,10 +54,6 @@ def setup_tracing(
 
     # Add OTLP exporter for production (Tempo)
     if otlp_endpoint:
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
-            OTLPSpanExporter,
-        )
-
         otlp_exporter = OTLPSpanExporter(
             endpoint=otlp_endpoint,
             insecure=True,  # Use insecure for internal Docker network
