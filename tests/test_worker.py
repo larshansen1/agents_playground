@@ -1,3 +1,4 @@
+import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -142,16 +143,13 @@ class TestWorkerLoop:
 
         # Mock sleep to avoid waiting
         with patch("app.worker.time.sleep"):
-            # Mock finding no tasks then raising exception to break loop
+            # Mock finding no tasks then raising KeyboardInterrupt to break loop
             # This is a trick to test the loop logic without infinite loop
-            # First call: returns None (no task), Second call: raises StopIteration to break
-            cur.fetchone.side_effect = [None, Exception("Break Loop")]
+            # First call: returns None (no task), Second call: raises KeyboardInterrupt to break
+            cur.fetchone.side_effect = [None, KeyboardInterrupt("Break Loop")]
 
-            try:
+            with contextlib.suppress(KeyboardInterrupt):
                 run_worker()
-            except Exception as e:
-                if str(e) != "Break Loop":
-                    raise e
 
         # Verify it tried to fetch a task
         assert cur.execute.called
