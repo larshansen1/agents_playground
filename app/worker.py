@@ -4,6 +4,7 @@ from typing import Any
 import psycopg2
 import requests
 from opentelemetry import trace
+from opentelemetry import trace as otel_trace
 from opentelemetry.trace import Status, StatusCode
 from psycopg2.extras import Json, RealDictCursor
 
@@ -270,8 +271,6 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915
     # Force flush spans to ensure they're exported to Tempo immediately
     # Without this, spans are buffered and may never be sent
     try:
-        from opentelemetry import trace as otel_trace
-
         provider = otel_trace.get_tracer_provider()
         if hasattr(provider, "force_flush"):
             provider.force_flush(timeout_millis=5000)

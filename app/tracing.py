@@ -1,17 +1,18 @@
-"""
-Distributed tracing configuration using OpenTelemetry.
+"""Distributed tracing configuration using OpenTelemetry.
 
-This module sets up tracing for the application with support for:
-- Console export (development)
-- OTLP export to Tempo (production)
-- Auto-instrumentation for FastAPI, SQLAlchemy, and requests
+Provides tracing setup for FastAPI backend and task workers.
 """
 
+from __future__ import annotations
+
+import atexit
 import logging
+import os
 
 from opentelemetry import trace
 
 # from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.psycopg2 import Psycopg2Instrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
@@ -23,7 +24,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 logger = logging.getLogger(__name__)
 
 
-def setup_tracing(  # noqa: PLR0915
+def setup_tracing(
     app, service_name: str = "task-api", use_console: bool = True, otlp_endpoint: str | None = None
 ):
     """
@@ -36,8 +37,6 @@ def setup_tracing(  # noqa: PLR0915
         otlp_endpoint: OTLP endpoint for Tempo (e.g., "http://tempo:4317")
     """
     # Enable OpenTelemetry debug logging
-    import os
-
     os.environ["OTEL_LOG_LEVEL"] = "debug"
 
     # Create resource with service name
@@ -59,11 +58,8 @@ def setup_tracing(  # noqa: PLR0915
         logger.info(f"Tracing: Console exporter enabled for {service_name}")
 
     # Add OTLP exporter for production (Tempo)
-    # Add OTLP exporter for production (Tempo)
     if otlp_endpoint:
         # Switch to HTTP exporter for better reliability
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-
         # Ensure endpoint uses HTTP port if not specified
         if "4317" in otlp_endpoint:
             otlp_endpoint = otlp_endpoint.replace("4317", "4318")
@@ -92,8 +88,6 @@ def setup_tracing(  # noqa: PLR0915
     trace.set_tracer_provider(provider)
 
     # Register shutdown handler to flush spans on exit
-    import atexit
-
     def shutdown_tracing():
         """Flush and shutdown all span processors."""
         try:
