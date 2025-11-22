@@ -157,28 +157,31 @@ try:
             }
             return colors.get(val, "")
 
-        # Apply styling
-        styled_df = display_df.style.applymap(color_status, subset=["Status"])
-
-        # Display dataframe with selection enabled
-        st.info("💡 Click on a task row to view details in the Task Search page")
-
-        event = st.dataframe(
-            styled_df,
-            width="stretch",
-            height=600,
-            on_select="rerun",
-            selection_mode="single-row",
+        # Create a clickable link for task IDs
+        # Note: We can't use styling with on_select, so we'll make task IDs into clickable links
+        display_df["Task ID"] = display_df["Task ID"].apply(
+            lambda task_id: f"/3_🔍_Task_Search?task_id={task_id}"
         )
 
-        # Handle row selection
-        if event.selection and event.selection.rows:
-            selected_row = event.selection.rows[0]
-            selected_task_id = full_task_ids[selected_row]
-            # Navigate to task search page with task ID
-            st.switch_page("pages/3_🔍_Task_Search.py")
-            # Set query params for task search page
-            st.query_params["task_id"] = selected_task_id
+        # Display dataframe with column config to make task IDs clickable
+        st.info("💡 Click on a Task ID to view full details")
+
+        st.dataframe(
+            display_df,
+            width="stretch",
+            height=600,
+            column_config={
+                "Task ID": st.column_config.LinkColumn(
+                    "Task ID",
+                    help="Click to view task details",
+                    display_text=r"^(.{8}).*",  # Show first 8 chars as display text
+                ),
+                "Status": st.column_config.Column(
+                    "Status",
+                    help="Task status",
+                ),
+            },
+        )
 
         # Summary info
         st.caption(f"Showing {len(display_df)} tasks")
