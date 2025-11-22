@@ -157,10 +157,11 @@ try:
             }
             return colors.get(val, "")
 
-        # Create a clickable link for task IDs
-        # Note: We can't use styling with on_select, so we'll make task IDs into clickable links
+        # Create clickable links for task IDs
+        # Streamlit pages are accessed by their display name, URL-encoded
+        # The page "3_🔍_Task_Search.py" is accessed as "Task_Search"
         display_df["Task ID"] = display_df["Task ID"].apply(
-            lambda task_id: f"/3_🔍_Task_Search?task_id={task_id}"
+            lambda task_id: f"Task_Search?task_id={task_id}"
         )
 
         # Display dataframe with column config to make task IDs clickable
