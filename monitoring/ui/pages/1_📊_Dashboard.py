@@ -88,11 +88,14 @@ try:
     if df.empty:
         st.info("No tasks found matching the selected filters.")
     else:
+        # Store full task IDs before formatting
+        full_task_ids = df["id"].astype(str).tolist()
+
         # Format the data for display
         display_df = df.copy()
 
-        # Truncate task IDs for readability
-        display_df["id"] = display_df["id"].astype(str).str[:8] + "..."
+        # Keep full task IDs for clickability
+        display_df["id"] = display_df["id"].astype(str)
 
         # Format timestamps
         display_df["created_at"] = pd.to_datetime(display_df["created_at"])
@@ -157,7 +160,25 @@ try:
         # Apply styling
         styled_df = display_df.style.applymap(color_status, subset=["Status"])
 
-        st.dataframe(styled_df, use_container_width=True, height=600)
+        # Display dataframe with selection enabled
+        st.info("💡 Click on a task row to view details in the Task Search page")
+
+        event = st.dataframe(
+            styled_df,
+            width="stretch",
+            height=600,
+            on_select="rerun",
+            selection_mode="single-row",
+        )
+
+        # Handle row selection
+        if event.selection and event.selection.rows:
+            selected_row = event.selection.rows[0]
+            selected_task_id = full_task_ids[selected_row]
+            # Navigate to task search page with task ID
+            st.switch_page("pages/3_🔍_Task_Search.py")
+            # Set query params for task search page
+            st.query_params["task_id"] = selected_task_id
 
         # Summary info
         st.caption(f"Showing {len(display_df)} tasks")

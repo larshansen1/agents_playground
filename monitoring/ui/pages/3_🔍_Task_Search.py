@@ -11,10 +11,15 @@ st.title("🔍 Task Search")
 # Database client
 db = get_db_client()
 
+# Check if task_id is provided via query params (from dashboard navigation)
+query_params = st.query_params
+default_task_id = query_params.get("task_id", "")
+
 # Search input
 st.markdown("### Search by Task ID")
 task_id = st.text_input(
     "Enter Task ID (UUID)",
+    value=default_task_id,
     placeholder="e.g., 550e8400-e29b-41d4-a716-446655440000",
     help="Enter the full UUID of the task to view details",
 )

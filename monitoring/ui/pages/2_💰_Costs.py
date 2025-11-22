@@ -147,7 +147,7 @@ try:
                 height=400,
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             # Cost projection
             if len(trends_df) >= 3:
@@ -196,7 +196,7 @@ try:
                 }
             )
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
 
         with col2:
             st.markdown("#### Cost Distribution")
@@ -213,7 +213,7 @@ try:
             fig.update_traces(textposition="inside", textinfo="percent+label")
             fig.update_layout(height=400)
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
     else:
         st.info("No user cost data available.")
 
@@ -242,7 +242,7 @@ try:
                 color_discrete_sequence=["#3498db", "#e74c3c"],
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         with col2:
             # Token ratio
