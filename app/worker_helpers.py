@@ -2,6 +2,7 @@
 
 import time
 
+from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 from psycopg2.extras import Json
 
@@ -12,7 +13,6 @@ from app.orchestrator import extract_workflow_type, get_orchestrator
 from app.trace_utils import extract_trace_context
 
 # We need tracer - get it from opentelemetry directly
-from opentelemetry import trace
 
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)

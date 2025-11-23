@@ -52,6 +52,47 @@ class TestTask(TestBase):
     generation_id = Column(String(100))
 
 
+class TestSubtask(TestBase):
+    """Test Subtask model compatible with SQLite."""
+
+    __tablename__ = "subtasks"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    parent_task_id = Column(String(36), nullable=False)
+    agent_type = Column(String, nullable=False)
+    iteration = Column(postgresql.INTEGER, nullable=False, default=1)
+    status = Column(String, nullable=False, default="pending")
+    input = Column(JSON, nullable=False)
+    output = Column(JSON)
+    error = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Cost tracking fields
+    user_id_hash = Column(String(64))
+    model_used = Column(String(100))
+    input_tokens = Column(postgresql.INTEGER)
+    output_tokens = Column(postgresql.INTEGER)
+    total_cost = Column(postgresql.NUMERIC(10, 6))
+    generation_id = Column(String(100))
+
+
+class TestWorkflowState(TestBase):
+    """Test WorkflowState model compatible with SQLite."""
+
+    __tablename__ = "workflow_state"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    parent_task_id = Column(String(36), nullable=False, unique=True)
+    workflow_type = Column(String, nullable=False)
+    current_iteration = Column(postgresql.INTEGER, nullable=False, default=1)
+    max_iterations = Column(postgresql.INTEGER, nullable=False, default=3)
+    current_state = Column(String, nullable=False)
+    state_data = Column(JSON)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 @pytest.fixture(scope="session")
 def event_loop() -> Generator:
     """Create an instance of the default event loop for the test session."""

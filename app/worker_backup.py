@@ -11,11 +11,9 @@ from psycopg2.extras import Json, RealDictCursor
 from app.db_sync import get_connection
 from app.logging_config import configure_logging, get_logger
 from app.metrics import worker_heartbeat
-from app.orchestrator import is_workflow_task
 from app.tasks import execute_task
 from app.trace_utils import extract_trace_context, get_current_trace_id
 from app.tracing import setup_tracing
-from app.worker_helpers import _process_subtask, _process_workflow_task
 
 # Configure structured logging
 configure_logging(log_level="INFO", json_logs=True)
@@ -132,20 +130,9 @@ def run_worker():
 
 
 def _process_task_row(conn, cur, row):  # noqa: PLR0915
-    """Process a single task or subtask row from the database."""
-    source_type = row.get("source_type", "task")
-
-    # Route to appropriate handler based on source type
-    if source_type == "subtask":
-        return _process_subtask(conn, cur, row)
-
-    # For regular tasks, check if it's a workflow task
-    task_type = row["type"]
-    if is_workflow_task(task_type):
-        return _process_workflow_task(conn, cur, row)
-
-    # Regular task - existing behavior
+    """Process a single task row from the database."""
     task_id = str(row["id"])
+    task_type = row["type"]
     task_input = row["input"]
     task_start_time = time.time()
 

@@ -125,8 +125,8 @@ def update_workflow_state(
         state_data: New state data (optional)
         conn: Database connection
     """
-    updates = []
-    params = []
+    updates: list[str] = []
+    params: list[Any] = []
 
     if current_state is not None:
         updates.append("current_state = %s")
@@ -144,18 +144,21 @@ def update_workflow_state(
         logger.warning("update_workflow_state_no_changes", parent_id=parent_id)
         return
 
+    # Ensure conn is not None
+    if conn is None:
+        msg = "Connection cannot be None"
+        raise ValueError(msg)
+
     updates.append("updated_at = now()")
     params.append(parent_id)
 
     with conn.cursor() as cur:
-        cur.execute(
-            f"""
+        query = f"""
             UPDATE workflow_state
             SET {', '.join(updates)}
             WHERE parent_task_id = %s
-            """,
-            params,
-        )
+            """  # nosec
+        cur.execute(query, params)
         conn.commit()
 
     logger.info(

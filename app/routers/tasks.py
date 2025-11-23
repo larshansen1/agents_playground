@@ -13,7 +13,7 @@ from app.metrics import (
     tasks_completed_total,
     tasks_created_total,
 )
-from app.models import Subtask, Task, WorkflowState
+from app.models import Task
 from app.schemas import TaskCreate, TaskResponse, TaskStatusUpdate, TaskUpdate
 from app.trace_utils import inject_trace_context
 from app.websocket import manager
@@ -195,7 +195,7 @@ async def list_tasks(
     Returns:
         List of tasks
     """
-    query = select(Task)
+    query = select(Task).options(selectinload(Task.subtasks), selectinload(Task.workflow_state))
 
     if status_filter:
         query = query.where(Task.status == status_filter)
@@ -248,7 +248,14 @@ async def update_task(
         update_data_dict["error"] = task.error
 
     await db.commit()
-    await db.refresh(task)
+
+    # Reload with relationships
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.subtasks), selectinload(Task.workflow_state))
+        .where(Task.id == task_id)
+    )
+    task = result.scalar_one()
 
     # Track metrics for completed tasks
     # Note: Worker updates DB directly, then calls API, so we always record metrics

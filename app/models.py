@@ -1,8 +1,8 @@
 import uuid
 
-from sqlalchemy import TIMESTAMP, Column, Index, Integer, Numeric, String, Text
+from sqlalchemy import TIMESTAMP, Column, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import Mapped, declarative_base, relationship
 from sqlalchemy.sql import func
 
 Base = declarative_base()
@@ -30,8 +30,80 @@ class Task(Base):
     total_cost = Column(Numeric(10, 6), default=0)
     generation_id = Column(String(100), nullable=True)
 
+    # Relationships for multi-agent workflows
+    subtasks: "Mapped[list[Subtask]]" = relationship(
+        "Subtask", back_populates="parent_task", cascade="all, delete-orphan"
+    )
+    workflow_state: "Mapped[WorkflowState | None]" = relationship(
+        "WorkflowState", back_populates="parent_task", uselist=False, cascade="all, delete-orphan"
+    )
+
     __table_args__ = (
         Index("idx_tasks_status", "status"),
         Index("idx_tasks_user_hash", "user_id_hash"),
         Index("idx_tasks_cost", "total_cost"),
+    )
+
+
+class Subtask(Base):
+    """SQLAlchemy model for subtasks table (individual agent executions)."""
+
+    __tablename__ = "subtasks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    parent_task_id = Column(
+        UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_type = Column(Text, nullable=False)
+    iteration = Column(Integer, nullable=False, default=1)
+    status = Column(Text, nullable=False, default="pending")
+    input = Column(JSONB, nullable=False)
+    output = Column(JSONB, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Cost tracking fields
+    user_id_hash = Column(String(64), nullable=True)
+    model_used = Column(String(100), nullable=True)
+    input_tokens = Column(Integer, default=0)
+    output_tokens = Column(Integer, default=0)
+    total_cost = Column(Numeric(10, 6), default=0)
+    generation_id = Column(String(100), nullable=True)
+
+    # Relationship
+    parent_task: "Mapped[Task]" = relationship("Task", back_populates="subtasks")
+
+    __table_args__ = (
+        Index("idx_subtasks_parent", "parent_task_id"),
+        Index("idx_subtasks_status", "status"),
+        Index("idx_subtasks_agent_type", "agent_type"),
+        Index("idx_subtasks_iteration", "parent_task_id", "iteration"),
+    )
+
+
+class WorkflowState(Base):
+    """SQLAlchemy model for workflow_state table (state machine tracking)."""
+
+    __tablename__ = "workflow_state"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    parent_task_id = Column(
+        UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    workflow_type = Column(Text, nullable=False)
+    current_iteration = Column(Integer, nullable=False, default=1)
+    max_iterations = Column(Integer, nullable=False, default=3)
+    current_state = Column(Text, nullable=False)
+    state_data = Column(JSONB, nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship
+    parent_task: "Mapped[Task]" = relationship("Task", back_populates="workflow_state")
+
+    __table_args__ = (
+        Index("idx_workflow_state_parent", "parent_task_id"),
+        Index("idx_workflow_state_type", "workflow_type"),
+        Index("idx_workflow_state_current_state", "current_state"),
     )

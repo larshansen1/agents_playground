@@ -30,6 +30,49 @@ class TaskUpdate(BaseModel):
     error: str | None = None
 
 
+class SubtaskResponse(BaseModel):
+    """Schema for subtask response."""
+
+    id: UUID
+    parent_task_id: UUID
+    agent_type: str
+    iteration: int
+    status: str
+    input: dict[str, Any]
+    output: dict[str, Any] | None = None
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    # Cost tracking fields
+    user_id_hash: str | None = None
+    model_used: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_cost: float | None = None
+    generation_id: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class WorkflowStateResponse(BaseModel):
+    """Schema for workflow state response."""
+
+    id: UUID
+    parent_task_id: UUID
+    workflow_type: str
+    current_iteration: int
+    max_iterations: int
+    current_state: str
+    state_data: dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class TaskResponse(BaseModel):
     """Schema for task response."""
 
@@ -49,6 +92,10 @@ class TaskResponse(BaseModel):
     output_tokens: int | None = None
     total_cost: float | None = None
     generation_id: str | None = None
+
+    # Multi-agent workflow fields (optional, populated on request)
+    subtasks: list[SubtaskResponse] | None = None
+    workflow_state: WorkflowStateResponse | None = None
 
     class Config:
         from_attributes = True

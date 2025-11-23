@@ -262,7 +262,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
                 iteration=current_iteration,
             )
 
-            return {"action": "complete", "output": final_output}
+            return {"action": "complete"}
 
         # Not approved - check if we can iterate again
         # Not approved - check if we can iterate again
@@ -298,7 +298,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
             )
 
             # Return complete action with the final output
-            return {"action": "complete", "output": final_output}
+            return {"action": "complete"}
 
         # Create new research iteration with feedback
         next_iteration = current_iteration + 1

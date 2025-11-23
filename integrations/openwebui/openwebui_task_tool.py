@@ -232,13 +232,9 @@ class Tools:
 
         return "\n".join(lines)
 
-    def _format_workflow_output(self, data: dict) -> str:
-        """Format workflow research output with main content first, metadata last."""
+    def _format_research_findings(self, research: dict) -> list[str]:
+        """Format research findings section."""
         lines = []
-        research = data.get("research_findings", {})
-        assessment = data.get("final_assessment", {})
-
-        # === MAIN CONTENT FIRST ===
 
         # 1. Research Findings (the meat of the content)
         if research.get("findings"):
@@ -281,7 +277,12 @@ class Tools:
                 lines.append(f"{i}. {question}")
             lines.append("")
 
-        # === METADATA AT BOTTOM ===
+        return lines
+
+    def _format_assessment_summary(self, assessment: dict, research: dict) -> list[str]:
+        """Format assessment summary section."""
+        lines = []
+
         lines.append("---")
         lines.append("")
         lines.append("## Assessment Summary")
@@ -317,6 +318,20 @@ class Tools:
             for area in assessment["areas_for_improvement"]:
                 lines.append(f"• {area}")
             lines.append("")
+
+        return lines
+
+    def _format_workflow_output(self, data: dict) -> str:
+        """Format workflow research output with main content first, metadata last."""
+        lines = []
+        research = data.get("research_findings", {})
+        assessment = data.get("final_assessment", {})
+
+        # === MAIN CONTENT FIRST ===
+        lines.extend(self._format_research_findings(research))
+
+        # === METADATA AT BOTTOM ===
+        lines.extend(self._format_assessment_summary(assessment, research))
 
         # Workflow status note (if present)
         if data.get("note"):
@@ -412,7 +427,6 @@ class Tools:
         task_id: str,
         emitter: Any = None,
         initial_check: bool = False,
-        trace_context: dict | None = None,
     ) -> str:
         """
         Async polling loop that updates the UI while waiting.
@@ -492,7 +506,39 @@ class Tools:
             await self._emit_status(emitter, f"Error: {e!s}", True)
             return f"❌ UNEXPECTED ERROR: {e!s}"
 
-    async def _create_task_async(  # noqa: PLR0912
+    def _process_files(
+        self, files: list[dict], task_type: str
+    ) -> tuple[list[dict], dict[str, Any]]:
+        """Process files and return metadata and content updates."""
+        files_data = []
+        extra_input: dict[str, Any] = {}
+
+        for file_obj in files:
+            file_id = file_obj.get("id") or file_obj.get("file", {}).get("id")
+            file_name = file_obj.get("name") or file_obj.get("file", {}).get("name") or "unknown"
+            file_path = file_obj.get("file", {}).get("path")
+            if not file_path:
+                file_path = f"{self.valves.upload_dir}/{file_id}_{file_name}"
+
+            file_data = self._read_file(file_path, file_name)
+            if file_data and "content" in file_data:
+                files_data.append({"id": file_id, "path": file_path, **file_data})
+
+                # For summarize_document, we need to pass the content in a specific way
+                if task_type == "summarize_document":
+                    # If it's a PDF or binary, pass as base64
+                    if file_name.lower().endswith(".pdf"):
+                        with Path(file_path).open("rb") as f:
+                            encoded = base64.b64encode(f.read()).decode("utf-8")
+                            extra_input["file_content"] = encoded
+                            extra_input["filename"] = file_name
+                    else:
+                        # Text file
+                        extra_input["text"] = file_data["content"]
+
+        return files_data, extra_input
+
+    async def _create_task_async(
         self,
         task_type: str,
         instruction: str,
@@ -532,31 +578,9 @@ class Tools:
                 "root_operation": trace_context.get("operation", "unknown"),
             }
 
-        files_data = []
-
         # Process files
-        for file_obj in files_to_process:
-            file_id = file_obj.get("id") or file_obj.get("file", {}).get("id")
-            file_name = file_obj.get("name") or file_obj.get("file", {}).get("name") or "unknown"
-            file_path = file_obj.get("file", {}).get("path")
-            if not file_path:
-                file_path = f"{self.valves.upload_dir}/{file_id}_{file_name}"
-
-            file_data = self._read_file(file_path, file_name)
-            if file_data and "content" in file_data:
-                files_data.append({"id": file_id, "path": file_path, **file_data})
-
-                # For summarize_document, we need to pass the content in a specific way
-                if task_type == "summarize_document":
-                    # If it's a PDF or binary, pass as base64
-                    if file_name.lower().endswith(".pdf"):
-                        with Path(file_path).open("rb") as f:
-                            encoded = base64.b64encode(f.read()).decode("utf-8")
-                            task_input["file_content"] = encoded
-                            task_input["filename"] = file_name
-                    else:
-                        # Text file
-                        task_input["text"] = file_data["content"]
+        files_data, extra_input = self._process_files(files, task_type)
+        task_input.update(extra_input)
 
         # Build task input based on type
         if task_type == "summarize_document":
@@ -593,9 +617,7 @@ class Tools:
             await self._emit_status(emitter, "Task Queued...", False)
 
             # Auto-wait for completion with the new async poller
-            return await self.wait_for_task_completion(
-                task_id, emitter=emitter, trace_context=trace_context
-            )
+            return await self.wait_for_task_completion(task_id, emitter=emitter)
 
         except requests.exceptions.RequestException as e:
             await self._emit_status(emitter, "Connection Failed", True)
@@ -657,9 +679,7 @@ class Tools:
             await self._emit_status(emitter, "Workflow Queued...", False)
 
             # Auto-wait for completion
-            return await self.wait_for_task_completion(
-                task_id, emitter=emitter, trace_context=trace_context
-            )
+            return await self.wait_for_task_completion(task_id, emitter=emitter)
 
         except requests.exceptions.RequestException as e:
             await self._emit_status(emitter, "Connection Failed", True)
@@ -697,7 +717,6 @@ class Tools:
                 uuid_match.group(0),
                 emitter=__event_emitter__,
                 initial_check=True,
-                trace_context=trace_context,
             )
 
         # Handle wait command
@@ -706,7 +725,6 @@ class Tools:
                 uuid_match.group(0),
                 emitter=__event_emitter__,
                 initial_check=False,
-                trace_context=trace_context,
             )
 
         # Create new task
