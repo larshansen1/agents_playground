@@ -343,16 +343,125 @@ SELECT id, type, status, created_at FROM tasks ORDER BY created_at DESC LIMIT 10
 - **CORS**: Configure for production environment
 - **Environment**: Secrets in `.env`, never committed
 
-## Observability
+## Monitoring & Observability
 
-The system is fully instrumented with OpenTelemetry for comprehensive observability:
+The system provides comprehensive observability through distributed tracing, metrics, and a management UI:
 
-- **OpenTelemetry**: Captures traces and metrics from API and Worker services.
-- **Tempo**: Stores distributed traces, allowing end-to-end visualization of task processing.
-- **Prometheus**: Collects metrics from the OpenTelemetry collector.
-- **Grafana**: Visualizes traces and metrics in a unified dashboard.
+### Distributed Tracing
 
-The worker automatically creates spans for each task, including child spans for external API calls (OpenRouter), providing detailed insights into latency and errors.
+Full end-to-end distributed tracing from OpenWebUI tool through workflow execution:
+
+**Access Grafana**: http://localhost:3002
+
+**What You Can See:**
+- Complete trace timelines from `@queue` command to final result
+- Multi-agent workflow execution with all iterations
+- Individual agent spans (research, assessment)
+- LLM API call duration and costs
+- Iteration-level breakdown for complex workflows
+
+**Trace Hierarchy Example:**
+```
+openwebui_tool.at_queue (28s)
+├─ worker.process_workflow
+├─ process_subtask:research (7.6s)
+│  └─ llm.openrouter.chat_completion
+└─ process_subtask:assessment (1.8s)
+   └─ llm.openrouter.chat_completion
+```
+
+**How It Works:**
+1. OpenWebUI tool generates a trace ID for each `@queue` command
+2. Trace context propagates through API → Worker → Orchestrator → Agents
+3. All spans link to the same trace ID for unified visibility
+4. Grafana Tempo stores traces for querying and visualization
+
+**Finding Traces:**
+- Use Management UI Task Search to get direct Grafana links
+- Search by trace ID in Grafana Explore
+- Filter by service: `task-worker`, `task-api`
+
+### Management UI
+
+**Access Streamlit UI**: http://localhost:8501
+
+The management UI provides three main views:
+
+**1. Dashboard (📊)**
+- Recent task activity with real-time updates
+- Task status distribution (pending, running, done, error)
+- Cost analytics by user and workflow type
+- Quick navigation to task details
+
+**2. Cost Analytics (💰)**
+- Per-user cost breakdown with LLM token usage
+- Model usage statistics
+- Time-series cost trends
+- Aggregated costs for multi-agent workflows
+
+**3. Task Search (🔍)**
+- Search tasks by ID
+- View complete task details (input, output, error)
+- Cost breakdown with token counts
+- **Direct links to distributed traces in Grafana**
+- Parent/child task relationships for workflows
+
+**Key Features:**
+- Auto-refresh every 5 seconds on dashboard
+- Click task IDs to navigate to detailed views
+- Trace links automatically generated with correct time ranges
+- Multi-agent workflow visibility with subtask breakdown
+
+### Metrics & Alerts
+
+**Prometheus**: http://localhost:9090
+
+Available metrics:
+- `tasks_created_total` - Tasks created by type
+- `tasks_processed_total` - Tasks completed by status
+- `worker_heartbeat` - Worker health indicator
+- `http_requests_total` - API request counts
+- Custom spans from OpenTelemetry
+
+**OpenTelemetry Collector**: Aggregates traces and metrics from all services
+
+### Accessing Services
+
+```bash
+# View live worker logs
+docker-compose logs -f task-worker
+
+# Check trace export
+docker-compose logs -f otel-collector | grep -i tempo
+
+# Query Prometheus metrics
+curl http://localhost:9090/api/v1/query?query=tasks_created_total
+
+# Database queries
+docker exec -it postgres psql -U openwebui -d openwebui
+
+# View recent tasks with trace context
+SELECT id, type, status, input->'_trace_context'->>'trace_id' as trace_id
+FROM tasks ORDER BY created_at DESC LIMIT 5;
+```
+
+### Multi-Agent Workflow Visibility
+
+For workflow tasks (e.g., `workflow:research_assessment`):
+
+1. **Task Hierarchy**: View parent task and all subtasks in Management UI
+2. **Iteration Tracking**: See each research/assessment iteration clearly
+3. **Cost Aggregation**: Parent task shows total cost across all iterations
+4. **Unified Trace**: One trace ID links all agent executions together
+5. **Timeline View**: Grafana shows complete workflow timeline with iteration spans
+
+Example workflow trace shows:
+- Initial research subtask (iteration 1)
+- Assessment subtask (iteration 1)
+- Revised research subtask (iteration 2) if needed
+- Final assessment approval
+
+All under one trace ID for complete visibility!
 
 ## Troubleshooting
 

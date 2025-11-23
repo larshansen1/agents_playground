@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.logging_config import get_logger
@@ -12,7 +13,7 @@ from app.metrics import (
     tasks_completed_total,
     tasks_created_total,
 )
-from app.models import Task
+from app.models import Subtask, Task, WorkflowState
 from app.schemas import TaskCreate, TaskResponse, TaskStatusUpdate, TaskUpdate
 from app.trace_utils import inject_trace_context
 from app.websocket import manager
@@ -28,7 +29,12 @@ async def create_task(task_create: TaskCreate, db: AsyncSession = Depends(get_db
     start_time = time.time()
 
     # Inject trace context into input for worker to continue the trace
-    task_input_with_context = inject_trace_context(task_create.input)
+    # Preserve trace context from client (e.g., OpenWebUI tool) if already present
+    if "_trace_context" not in task_create.input:
+        task_input_with_context = inject_trace_context(task_create.input)
+    else:
+        # Client already provided trace context, use it as-is
+        task_input_with_context = task_create.input
 
     # Create task with trace context
     task = Task(
@@ -39,7 +45,14 @@ async def create_task(task_create: TaskCreate, db: AsyncSession = Depends(get_db
 
     db.add(task)
     await db.commit()
-    await db.refresh(task)
+
+    # Reload with relationships for response validation
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.subtasks), selectinload(Task.workflow_state))
+        .where(Task.id == task.id)
+    )
+    task = result.scalar_one()
 
     # Track metrics
     tasks_created_total.labels(task_type=task.type).inc()
@@ -150,7 +163,11 @@ async def get_task(task_id: UUID, db: AsyncSession = Depends(get_db)) -> TaskRes
     Raises:
         HTTPException: If task not found
     """
-    result = await db.execute(select(Task).where(Task.id == task_id))
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.subtasks), selectinload(Task.workflow_state))
+        .where(Task.id == task_id)
+    )
     task = result.scalar_one_or_none()
 
     if not task:
