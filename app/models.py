@@ -107,3 +107,25 @@ class WorkflowState(Base):
         Index("idx_workflow_state_type", "workflow_type"),
         Index("idx_workflow_state_current_state", "current_state"),
     )
+
+
+class AuditLog(Base):
+    """SQLAlchemy model for audit_logs table (immutable event history)."""
+
+    __tablename__ = "audit_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    timestamp = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    event_type = Column(Text, nullable=False)  # e.g., task_created, task_completed
+    user_id_hash = Column(String(64), nullable=True)
+    resource_id = Column(String(36), nullable=True)  # Task ID or Subtask ID
+    metadata_ = Column(
+        "metadata", JSONB, nullable=True
+    )  # 'metadata' is reserved in SQLAlchemy Base
+
+    __table_args__ = (
+        Index("idx_audit_user", "user_id_hash"),
+        Index("idx_audit_resource", "resource_id"),
+        Index("idx_audit_event", "event_type"),
+        Index("idx_audit_timestamp", "timestamp"),
+    )

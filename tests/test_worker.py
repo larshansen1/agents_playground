@@ -33,7 +33,14 @@ def mock_tracer():
     with patch("app.worker.tracer") as mock:
         span = MagicMock()
         mock.start_as_current_span.return_value.__enter__.return_value = span
+        mock.start_as_current_span.return_value.__enter__.return_value = span
         yield mock, span
+
+
+@pytest.fixture
+def mock_audit_log():
+    with patch("app.worker.log_audit_event") as mock:
+        yield mock
 
 
 class TestWorkerNotification:
@@ -68,7 +75,9 @@ class TestWorkerNotification:
 
 class TestTaskProcessing:
     @pytest.mark.usefixtures("mock_tracer")
-    def test_process_task_success(self, mock_db_connection, mock_execute_task, mock_requests):
+    def test_process_task_success(
+        self, mock_db_connection, mock_execute_task, mock_requests, mock_audit_log
+    ):
         """Test successful task processing flow."""
         _, conn, cur = mock_db_connection
 
@@ -98,9 +107,14 @@ class TestTaskProcessing:
         # Verify execute_task called
         mock_execute_task.assert_called_once_with("test_task", {"key": "value"}, None)
 
+        # Verify audit logs (Start + Complete)
+        assert mock_audit_log.call_count == 2
+        assert mock_audit_log.call_args_list[0][0][1] == "task_started"
+        assert mock_audit_log.call_args_list[1][0][1] == "task_completed"
+
     @pytest.mark.usefixtures("mock_tracer")
     def test_process_task_execution_error(
-        self, mock_db_connection, mock_execute_task, mock_requests
+        self, mock_db_connection, mock_execute_task, mock_requests, mock_audit_log
     ):
         """Test task processing with execution error."""
         _, conn, cur = mock_db_connection
@@ -120,7 +134,12 @@ class TestTaskProcessing:
         # Verify API notification for error
         assert mock_requests.patch.call_count == 2  # running, then error
 
-    @pytest.mark.usefixtures("mock_requests", "mock_tracer")
+        # Verify audit logs (Start + Failed)
+        assert mock_audit_log.call_count == 2
+        assert mock_audit_log.call_args_list[0][0][1] == "task_started"
+        assert mock_audit_log.call_args_list[1][0][1] == "task_failed"
+
+    @pytest.mark.usefixtures("mock_requests", "mock_tracer", "mock_audit_log")
     def test_process_task_legacy_result(self, mock_db_connection, mock_execute_task):
         """Test backward compatibility for legacy result format (direct output)."""
         _, conn, cur = mock_db_connection

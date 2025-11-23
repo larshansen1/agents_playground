@@ -155,7 +155,7 @@ def update_workflow_state(
     with conn.cursor() as cur:
         query = f"""
             UPDATE workflow_state
-            SET {', '.join(updates)}
+            SET {", ".join(updates)}
             WHERE parent_task_id = %s
             """  # nosec
         cur.execute(query, params)

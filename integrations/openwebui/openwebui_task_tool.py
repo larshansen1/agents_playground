@@ -1,7 +1,7 @@
 """
 title: Task Queue with mTLS (Async Push)
 author: lars
-version: 5.2
+version: 5.3
 file_handler: true
 description: Queue delegation system with mTLS support, real-time UI updates, multi-agent workflow support, and distributed tracing.
 requirements: requests, asyncio

@@ -8,6 +8,7 @@ from opentelemetry import trace as otel_trace
 from opentelemetry.trace import Status, StatusCode
 from psycopg2.extras import Json, RealDictCursor
 
+from app.audit import log_audit_event
 from app.db_sync import get_connection
 from app.logging_config import configure_logging, get_logger
 from app.metrics import worker_heartbeat
@@ -131,7 +132,7 @@ def run_worker():
         time.sleep(0.2)
 
 
-def _process_task_row(conn, cur, row):  # noqa: PLR0915
+def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912
     """Process a single task or subtask row from the database."""
     source_type = row.get("source_type", "task")
 
@@ -183,6 +184,16 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915
 
             # Extract user_id_hash from input (if present)
             user_id_hash = cleaned_input.pop("_user_id_hash", None)
+
+            # Audit Log: Task Started
+            log_audit_event(
+                conn,
+                "task_started",
+                resource_id=task_id,
+                user_id_hash=user_id_hash,
+                meta={"task_type": task_type},
+            )
+            conn.commit()  # Commit audit log
 
             # Execute the task (this will create child spans for OpenRouter calls)
             result = execute_task(task_type, cleaned_input, user_id_hash)
@@ -249,6 +260,22 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915
                 )
             conn.commit()
 
+            # Audit Log: Task Completed
+            log_audit_event(
+                conn,
+                "task_completed",
+                resource_id=task_id,
+                user_id_hash=user_id_hash,
+                meta={
+                    "total_cost": float(usage.get("total_cost", 0)) if usage else 0,
+                    "input_tokens": usage.get("input_tokens", 0) if usage else 0,
+                    "output_tokens": usage.get("output_tokens", 0) if usage else 0,
+                    "model_used": usage.get("model_used") if usage else None,
+                    "duration_seconds": task_duration,
+                },
+            )
+            conn.commit()
+
             # Notify API for metrics and WebSocket (best-effort)
             notify_api_async(task_id, "done", output=output)
 
@@ -277,6 +304,27 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915
                 WHERE id = %s
                 """,
                 (error_msg, task_id),
+            )
+            conn.commit()
+
+            # Audit Log: Task Failed
+            # We need to try to get user_id_hash if we can, but it might not be extracted yet if error happened early
+            # In this flow, we extracted it early, so we should have it if it was in input.
+            # However, user_id_hash variable is local to the try block.
+            # We need to ensure it's available in except block or re-extract.
+            # For simplicity in this patch, we'll re-extract or use None if not available easily.
+            # Actually, let's just use what we have. 'user_id_hash' might be unbound if error before assignment.
+            try:
+                uid_hash = user_id_hash if "user_id_hash" in locals() else None
+            except UnboundLocalError:
+                uid_hash = None
+
+            log_audit_event(
+                conn,
+                "task_failed",
+                resource_id=task_id,
+                user_id_hash=uid_hash,
+                meta={"error": error_msg, "duration_seconds": task_duration},
             )
             conn.commit()
 

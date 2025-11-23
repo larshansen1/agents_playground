@@ -12,7 +12,7 @@ from app.metrics import (
     websocket_messages_sent,
 )
 from app.middleware.mtls import MTLSMiddleware
-from app.routers import tasks
+from app.routers import admin, tasks
 from app.tracing import setup_tracing
 from app.websocket import manager
 
@@ -67,6 +67,7 @@ app.add_middleware(MTLSMiddleware)
 
 # Include routers
 app.include_router(tasks.router)
+app.include_router(admin.router)
 
 
 @app.on_event("startup")

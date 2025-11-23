@@ -254,9 +254,9 @@ try:
 
             st.markdown(f"""
             **Token Statistics:**
-            - Input: {summary['total_input_tokens']:,} tokens
-            - Output: {summary['total_output_tokens']:,} tokens
-            - Total: {summary['total_input_tokens'] + summary['total_output_tokens']:,} tokens
+            - Input: {summary["total_input_tokens"]:,} tokens
+            - Output: {summary["total_output_tokens"]:,} tokens
+            - Total: {summary["total_input_tokens"] + summary["total_output_tokens"]:,} tokens
             """)
 
 except Exception as e:

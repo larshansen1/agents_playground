@@ -13,6 +13,11 @@ def extract_json(text: str) -> dict[str, Any]:
     if not text:
         return {}
 
+    # Handle SSE-like response (data: prefix)
+    if text.strip().startswith("data:"):
+        # Remove 'data: ' prefix and any trailing newlines/whitespace
+        text = text.strip().replace("data: ", "", 1).strip()
+
     # Try to find JSON within markdown code blocks
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if match:

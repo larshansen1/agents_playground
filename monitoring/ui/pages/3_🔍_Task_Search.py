@@ -185,7 +185,7 @@ if task_id:
                     st.info(f"""
                     **Troubleshooting**: If trace is not visible in Grafana:
                     - Traces are only available for tasks that completed recently
-                    - This task was created at: {task_time.strftime('%Y-%m-%d %H:%M:%S UTC')}
+                    - This task was created at: {task_time.strftime("%Y-%m-%d %H:%M:%S UTC")}
                     - Check that Tempo is receiving traces: `docker-compose logs tempo`
                     - Verify worker is sending traces: `docker-compose logs task-worker | grep trace`
                     """)
