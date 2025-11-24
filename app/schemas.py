@@ -20,6 +20,8 @@ class TaskCreate(BaseModel):
 
     type: str = Field(..., description="Type of the task")
     input: dict[str, Any] = Field(..., description="Input data for the task")
+    user_id: str | None = Field(None, description="User ID initiating the task")
+    tenant_id: str | None = Field(None, description="Tenant ID for multi-tenant isolation")
 
 
 class TaskUpdate(BaseModel):
@@ -46,6 +48,7 @@ class SubtaskResponse(BaseModel):
 
     # Cost tracking fields
     user_id_hash: str | None = None
+    tenant_id: str | None = None
     model_used: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -66,6 +69,7 @@ class WorkflowStateResponse(BaseModel):
     max_iterations: int
     current_state: str
     state_data: dict[str, Any] | None = None
+    tenant_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -87,6 +91,7 @@ class TaskResponse(BaseModel):
 
     # Cost tracking fields
     user_id_hash: str | None = None
+    tenant_id: str | None = None
     model_used: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None

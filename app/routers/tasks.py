@@ -26,7 +26,20 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(task_create: TaskCreate, db: AsyncSession = Depends(get_db)) -> TaskResponse:  # noqa: B008
     """Create a new task with trace context for distributed tracing."""
+    import hashlib
+
+    from app.audit import log_task_created
+
     start_time = time.time()
+
+    # Extract user and tenant context
+    user_id = task_create.user_id
+    tenant_id = task_create.tenant_id
+
+    # Hash the user_id if provided (for privacy)
+    user_id_hash = None
+    if user_id:
+        user_id_hash = hashlib.sha256(user_id.encode()).hexdigest()
 
     # Inject trace context into input for worker to continue the trace
     # Preserve trace context from client (e.g., OpenWebUI tool) if already present
@@ -36,14 +49,33 @@ async def create_task(task_create: TaskCreate, db: AsyncSession = Depends(get_db
         # Client already provided trace context, use it as-is
         task_input_with_context = task_create.input
 
-    # Create task with trace context
+    # Inject user context into task input for worker propagation
+    if user_id_hash:
+        task_input_with_context["_user_id_hash"] = user_id_hash
+    if tenant_id:
+        task_input_with_context["_tenant_id"] = tenant_id
+
+    # Create task with trace context and user context
     task = Task(
         type=task_create.type,
-        input=task_input_with_context,  # Includes _trace_context
+        input=task_input_with_context,  # Includes _trace_context, _user_id_hash, _tenant_id
         status="pending",
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
     )
 
     db.add(task)
+
+    # Log audit event (add to same session, will commit together)
+    audit_log = log_task_created(
+        db,
+        task_id=task.id,
+        task_type=task.type,
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+    )
+    db.add(audit_log)
+
     await db.commit()
 
     # Reload with relationships for response validation
@@ -64,6 +96,8 @@ async def create_task(task_create: TaskCreate, db: AsyncSession = Depends(get_db
         task_id=str(task.id),
         task_type=task.type,
         status=task.status,
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
         duration_seconds=f"{duration:.3f}",
     )
 
@@ -246,6 +280,30 @@ async def update_task(
     if task_update.error is not None:
         task.error = task_update.error
         update_data_dict["error"] = task.error
+
+    # Log audit event for update
+    from app.audit import log_task_completed, log_task_updated
+
+    if task.status in ["done", "error"]:
+        # Log completion event
+        audit_log = log_task_completed(
+            db,
+            task_id=task.id,
+            status=task.status,
+            user_id_hash=task.user_id_hash,
+            tenant_id=task.tenant_id,
+            metadata=update_data_dict,
+        )
+    else:
+        # Log regular update event
+        audit_log = log_task_updated(
+            db,
+            task_id=task.id,
+            user_id_hash=task.user_id_hash,
+            tenant_id=task.tenant_id,
+            changes=update_data_dict,
+        )
+    db.add(audit_log)
 
     await db.commit()
 

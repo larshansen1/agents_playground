@@ -43,8 +43,8 @@ This dashboard provides real-time monitoring and analytics for your task process
 **Available Pages:**
 - 📊 **Dashboard**: Real-time task monitoring and system status
 - 💰 **Costs**: Cost tracking and analysis
-- 📈 **Analytics**: Historical trends and insights
 - 🔍 **Task Search**: Find and inspect individual tasks
+- 👤 **User Search**: Find all tasks for a specific user (for troubleshooting)
 
 **Getting Started:**
 1. Use the sidebar to navigate between pages

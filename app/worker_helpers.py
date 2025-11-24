@@ -87,6 +87,7 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
             conn.commit()
 
             user_id_hash = cleaned_input.pop("_user_id_hash", None)
+            tenant_id = cleaned_input.pop("_tenant_id", None)
 
             agent = get_agent(agent_type)
             result = agent.execute(cleaned_input, user_id_hash)
@@ -99,7 +100,7 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
                 cur.execute(
                     """
                     UPDATE subtasks
-                    SET status = 'done', output = %s, user_id_hash = %s,
+                    SET status = 'done', output = %s, user_id_hash = %s, tenant_id = %s,
                         model_used = %s, input_tokens = %s, output_tokens = %s,
                         total_cost = %s, generation_id = %s
                     WHERE id = %s
@@ -107,6 +108,7 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
                     (
                         Json(output),
                         user_id_hash,
+                        tenant_id,
                         usage.get("model_used"),
                         usage.get("input_tokens", 0),
                         usage.get("output_tokens", 0),
@@ -117,8 +119,8 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
                 )
             else:
                 cur.execute(
-                    "UPDATE subtasks SET status = 'done', output = %s WHERE id = %s",
-                    (Json(output), subtask_id),
+                    "UPDATE subtasks SET status = 'done', output = %s, user_id_hash = %s, tenant_id = %s WHERE id = %s",
+                    (Json(output), user_id_hash, tenant_id, subtask_id),
                 )
             conn.commit()
 
@@ -130,7 +132,7 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
                 orchestrator = get_orchestrator(workflow_type)
 
                 result_action = orchestrator.process_subtask_completion(
-                    parent_task_id, subtask_id, output, conn, user_id_hash
+                    parent_task_id, subtask_id, output, conn, user_id_hash, tenant_id
                 )
 
                 action = result_action.get("action")
@@ -187,11 +189,12 @@ def _process_workflow_task(conn, cur, row):
             notify_api_async(task_id, "running")
 
             user_id_hash = cleaned_input.pop("_user_id_hash", None)
+            tenant_id = cleaned_input.pop("_tenant_id", None)
 
             workflow_type = extract_workflow_type(task_type)
             orchestrator = get_orchestrator(workflow_type)
             # Pass original task_input (not cleaned_input) to preserve trace context
-            orchestrator.create_workflow(task_id, task_input, conn, user_id_hash)
+            orchestrator.create_workflow(task_id, task_input, conn, user_id_hash, tenant_id)
 
             task_duration = time.time() - task_start_time
             span.set_status(Status(StatusCode.OK))

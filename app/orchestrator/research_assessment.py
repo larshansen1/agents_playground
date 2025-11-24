@@ -49,6 +49,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
         input_data: dict[str, Any],
         conn: psycopg2.extensions.connection,
         user_id_hash: str | None = None,
+        tenant_id: str | None = None,
     ) -> None:
         """
         Initialize research-assessment workflow.
@@ -60,6 +61,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
             input_data: Should contain 'topic' key
             conn: Database connection
             user_id_hash: Optional user ID
+            tenant_id: Optional tenant ID
         """
         # Create workflow state
         create_workflow_state(
@@ -69,6 +71,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
             max_iterations=self.max_iterations_value,
             conn=conn,
             state_data={"original_topic": input_data.get("topic", "")},
+            tenant_id=tenant_id,
         )
 
         # Create first research subtask
@@ -85,6 +88,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
             input_data=research_input,
             conn=conn,
             user_id_hash=user_id_hash,
+            tenant_id=tenant_id,
         )
 
         logger.info(
@@ -101,6 +105,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
         subtask_output: dict[str, Any],
         conn: psycopg2.extensions.connection,
         user_id_hash: str | None = None,
+        tenant_id: str | None = None,
     ) -> dict[str, str]:
         """
         Process subtask completion and transition workflow state.
@@ -111,6 +116,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
             subtask_output: Output from completed subtask
             conn: Database connection
             user_id_hash: Optional user ID
+            tenant_id: Optional tenant ID
 
         Returns:
             Dict with 'action':  'continue' | 'complete' | 'failed'
@@ -149,6 +155,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
                 workflow_state,
                 conn,
                 user_id_hash,
+                tenant_id,
             )
 
         if current_state == "assessment" and agent_type == "assessment":
@@ -160,6 +167,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
                 workflow_state,
                 conn,
                 user_id_hash,
+                tenant_id,
             )
 
         # Invalid state transition
@@ -178,6 +186,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
         workflow_state: dict[str, Any],
         conn: psycopg2.extensions.connection,
         user_id_hash: str | None,
+        tenant_id: str | None,
     ) -> dict[str, str]:
         """Transition from research to assessment."""
         # Update workflow state
@@ -209,6 +218,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
             input_data=assessment_input,
             conn=conn,
             user_id_hash=user_id_hash,
+            tenant_id=tenant_id,
         )
 
         logger.info(
@@ -227,6 +237,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
         workflow_state: dict[str, Any],
         conn: psycopg2.extensions.connection,
         user_id_hash: str | None,
+        tenant_id: str | None,
     ) -> dict[str, str]:
         """Process assessment result and determine next action."""
         approved = assessment_output.get("approved", False)
@@ -332,6 +343,7 @@ class ResearchAssessmentOrchestrator(Orchestrator):
             input_data=research_input,
             conn=conn,
             user_id_hash=user_id_hash,
+            tenant_id=tenant_id,
         )
 
         logger.info(

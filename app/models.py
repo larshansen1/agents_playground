@@ -24,6 +24,7 @@ class Task(Base):
 
     # Cost tracking fields
     user_id_hash = Column(String(64), nullable=True)
+    tenant_id = Column(String(100), nullable=True)
     model_used = Column(String(100), nullable=True)
     input_tokens = Column(Integer, default=0)
     output_tokens = Column(Integer, default=0)
@@ -41,6 +42,8 @@ class Task(Base):
     __table_args__ = (
         Index("idx_tasks_status", "status"),
         Index("idx_tasks_user_hash", "user_id_hash"),
+        Index("idx_tasks_tenant", "tenant_id"),
+        Index("idx_tasks_user_tenant", "user_id_hash", "tenant_id"),
         Index("idx_tasks_cost", "total_cost"),
     )
 
@@ -65,6 +68,7 @@ class Subtask(Base):
 
     # Cost tracking fields
     user_id_hash = Column(String(64), nullable=True)
+    tenant_id = Column(String(100), nullable=True)
     model_used = Column(String(100), nullable=True)
     input_tokens = Column(Integer, default=0)
     output_tokens = Column(Integer, default=0)
@@ -79,6 +83,7 @@ class Subtask(Base):
         Index("idx_subtasks_status", "status"),
         Index("idx_subtasks_agent_type", "agent_type"),
         Index("idx_subtasks_iteration", "parent_task_id", "iteration"),
+        Index("idx_subtasks_tenant", "tenant_id"),
     )
 
 
@@ -96,6 +101,7 @@ class WorkflowState(Base):
     max_iterations = Column(Integer, nullable=False, default=3)
     current_state = Column(Text, nullable=False)
     state_data = Column(JSONB, nullable=True)
+    tenant_id = Column(String(100), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -106,6 +112,7 @@ class WorkflowState(Base):
         Index("idx_workflow_state_parent", "parent_task_id"),
         Index("idx_workflow_state_type", "workflow_type"),
         Index("idx_workflow_state_current_state", "current_state"),
+        Index("idx_workflow_state_tenant", "tenant_id"),
     )
 
 
@@ -118,6 +125,7 @@ class AuditLog(Base):
     timestamp = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     event_type = Column(Text, nullable=False)  # e.g., task_created, task_completed
     user_id_hash = Column(String(64), nullable=True)
+    tenant_id = Column(String(100), nullable=True)
     resource_id = Column(String(36), nullable=True)  # Task ID or Subtask ID
     metadata_ = Column(
         "metadata", JSONB, nullable=True
@@ -125,6 +133,8 @@ class AuditLog(Base):
 
     __table_args__ = (
         Index("idx_audit_user", "user_id_hash"),
+        Index("idx_audit_tenant", "tenant_id"),
+        Index("idx_audit_user_tenant", "user_id_hash", "tenant_id"),
         Index("idx_audit_resource", "resource_id"),
         Index("idx_audit_event", "event_type"),
         Index("idx_audit_timestamp", "timestamp"),

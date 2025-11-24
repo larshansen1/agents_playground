@@ -30,6 +30,7 @@ class Orchestrator(ABC):
         input_data: dict[str, Any],
         conn: psycopg2.extensions.connection,
         user_id_hash: str | None = None,
+        tenant_id: str | None = None,
     ) -> None:
         """
         Initialize the workflow.
@@ -41,6 +42,7 @@ class Orchestrator(ABC):
             input_data: Initial workflow input
             conn: Database connection
             user_id_hash: Optional user ID for cost tracking
+            tenant_id: Optional tenant ID for multi-tenant isolation
         """
 
     @abstractmethod
@@ -48,10 +50,11 @@ class Orchestrator(ABC):
         self,
         parent_task_id: str,
         subtask_id: str,
-        subtask_output: dict[str, Any],
+        output: dict[str, Any],
         conn: psycopg2.extensions.connection,
         user_id_hash: str | None = None,
-    ) -> dict[str, str]:
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
         """
         Process a completed subtask and determine next action.
 

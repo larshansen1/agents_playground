@@ -1,7 +1,7 @@
 """
 title: Task Queue with mTLS (Async Push)
 author: lars
-version: 5.3
+version: 7.2
 file_handler: true
 description: Queue delegation system with mTLS support, real-time UI updates, multi-agent workflow support, and distributed tracing.
 requirements: requests, asyncio
@@ -9,7 +9,6 @@ requirements: requests, asyncio
 
 import asyncio
 import base64
-import hashlib
 import json
 import os
 import re
@@ -76,6 +75,10 @@ class Tools:
         verify_ssl: bool = Field(
             default=False,
             description="Verify SSL certificates (set False for self-signed certs in development)",
+        )
+        tenant_id: str = Field(
+            default="",
+            description="Tenant ID for this Open WebUI environment (e.g., 'production', 'staging', 'client-name'). Used for multi-tenancy and environment isolation. Leave empty to use 'default-tenant'.",
         )
 
     def __init__(self):
@@ -538,7 +541,7 @@ class Tools:
 
         return files_data, extra_input
 
-    async def _create_task_async(
+    async def _create_task_async(  # noqa: PLR0915 - Complex task creation logic
         self,
         task_type: str,
         instruction: str,
@@ -553,20 +556,52 @@ class Tools:
 
         task_input: dict[str, Any] = {"description": instruction}
 
-        # Inject user context for cost tracking
+        # Extract user context for tracking
         try:
             # __user__ is injected by Open WebUI runtime
-            # Use globals() to access it safely or default to anonymous
             user_dict = globals().get("__user__", {})
-            user_email = user_dict.get("email", "anonymous")
-        except (NameError, AttributeError):
-            user_email = "anonymous"
 
-        user_id_hash = hashlib.sha256(user_email.encode()).hexdigest()
-        task_input["_user_id_hash"] = user_id_hash
+            # DEBUG: Comprehensive logging to see what's available
+            print("=" * 80)
+            print("[DEBUG] Open WebUI User Context Inspection")
+            print("=" * 80)
+            print(f"[DEBUG] __user__ type: {type(user_dict)}")
+            print(f"[DEBUG] __user__ keys: {list(user_dict.keys()) if user_dict else 'None'}")
+            print("[DEBUG] __user__ full content:")
+            for key, value in user_dict.items():
+                print(f"  {key}: {value}")
+            print("=" * 80)
+
+            # Try multiple possible email field names
+            user_email = (
+                user_dict.get("email")
+                or user_dict.get("Email")
+                or user_dict.get("user_email")
+                or user_dict.get("username")
+                or user_dict.get("name")
+                or "anonymous"
+            )
+
+            print(f"[DEBUG] Extracted email: {user_email}")
+
+            # Extract tenant_id from Open WebUI workspace context
+            # Check for workspace_id, role, or user id as tenant identifier
+            tenant_id = (
+                user_dict.get("workspace_id")  # If Open WebUI has multi-workspace
+                or user_dict.get("tenant_id")  # Direct tenant field
+                or user_dict.get("role")  # Use role as tenant (e.g., "admin", "user")
+                or "default-tenant"
+            )
+
+            print(f"[DEBUG] Extracted tenant_id: {tenant_id}")
+            print("=" * 80)
+
+        except (NameError, AttributeError) as e:
+            print(f"[DEBUG] Exception accessing __user__: {e}")
+            user_email = "anonymous"
+            tenant_id = "default-tenant"
 
         # Inject trace context for distributed tracing
-        # Use W3C Trace Context format for compatibility with OpenTelemetry
         if trace_context:
             child_span_id = generate_span_id()
             traceparent = create_traceparent(trace_context["trace_id"], child_span_id, sampled=True)
@@ -577,6 +612,14 @@ class Tools:
                 "parent_span_id": child_span_id,
                 "root_operation": trace_context.get("operation", "unknown"),
             }
+
+        # Store debug info in task input so we can inspect it
+        task_input["_debug_user_context"] = {
+            "user_dict_keys": list(user_dict.keys()) if user_dict else [],
+            "user_dict_content": user_dict if user_dict else {},
+            "extracted_email": user_email,
+            "extracted_tenant": tenant_id,
+        }
 
         # Process files
         files_data, extra_input = self._process_files(files, task_type)
@@ -603,10 +646,19 @@ class Tools:
         try:
             await self._emit_status(emitter, "Uploading to Backend...", False)
 
+            # Build request payload with user_id and tenant_id at top level
+            request_payload = {
+                "type": task_type,
+                "input": task_input,
+                "user_id": user_email,  # API will hash this
+            }
+            if tenant_id:
+                request_payload["tenant_id"] = tenant_id
+
             response = await asyncio.to_thread(
                 requests.post,
                 f"{self.valves.task_api_url}/tasks",
-                json={"type": task_type, "input": task_input},
+                json=request_payload,
                 timeout=30,
                 **self._get_ssl_config(),
             )
@@ -629,6 +681,7 @@ class Tools:
         instruction: str,
         emitter: Any = None,
         trace_context: dict | None = None,
+        user_dict: dict | None = None,  # User context passed from main function
     ) -> str:
         """
         Create a workflow task (no files required).
@@ -638,18 +691,24 @@ class Tools:
         # Extract topic from instruction
         task_input: dict[str, Any] = {"topic": instruction}
 
-        # Inject user context for cost tracking
-        try:
-            user_dict = globals().get("__user__", {})
-            user_email = user_dict.get("email", "anonymous")
-        except (NameError, AttributeError):
-            user_email = "anonymous"
+        # Extract user context for tracking (passed as parameter from main function)
+        user_dict = user_dict or {}
+        user_email = user_dict.get("email", "anonymous")
 
-        user_id_hash = hashlib.sha256(user_email.encode()).hexdigest()
-        task_input["_user_id_hash"] = user_id_hash
+        # Extract tenant_id from valve configuration
+        # Tenant identifies the ENVIRONMENT (e.g., "production", "staging", "client-a")
+        # NOT related to user email - set this in tool configuration
+        tenant_id = self.valves.tenant_id or "default-tenant"
+
+        # Store ONLY metadata for debugging (NOT the plain email for privacy)
+        task_input["_debug_user_context"] = {
+            "user_dict_keys": list(user_dict.keys()),
+            "has_email": bool(user_email and user_email != "anonymous"),
+            "tenant_id": tenant_id,
+            "tenant_configured": bool(self.valves.tenant_id),
+        }
 
         # Inject trace context for distributed tracing
-        # Use W3C Trace Context format for compatibility with OpenTelemetry
         if trace_context:
             child_span_id = generate_span_id()
             traceparent = create_traceparent(trace_context["trace_id"], child_span_id, sampled=True)
@@ -665,10 +724,19 @@ class Tools:
         try:
             await self._emit_status(emitter, "Submitting to Backend...", False)
 
+            # Build request payload with user_id and tenant_id at top level
+            request_payload = {
+                "type": task_type,
+                "input": task_input,
+                "user_id": user_email,  # API will hash this
+            }
+            if tenant_id:
+                request_payload["tenant_id"] = tenant_id
+
             response = await asyncio.to_thread(
                 requests.post,
                 f"{self.valves.task_api_url}/tasks",
-                json={"type": task_type, "input": task_input},
+                json=request_payload,
                 timeout=30,
                 **self._get_ssl_config(),
             )
@@ -686,23 +754,38 @@ class Tools:
             return f"❌ ERROR creating workflow: {e!s}\n\nMake sure the API is running and mTLS certificates are configured correctly."
 
     async def at_queue(
-        self, instruction: str, __event_emitter__: Any = None, __files__: list[dict] | None = None
+        self,
+        instruction: str,
+        __event_emitter__: Any = None,
+        __files__: list[dict] | None = None,
+        __user__: dict | None = None,  # User context from Open WebUI
     ) -> str:
         """
         Main entry point for @queue commands (ASYNC).
         """
+        # Extract user context from parameter (Open WebUI v0.6.x passes it as parameter)
+        user_dict = __user__ or {}
+        user_email = user_dict.get("email", "anonymous")
+
+        # Extract tenant_id from valve configuration
+        # Tenant identifies the ENVIRONMENT (e.g., "production", "staging")
+        tenant_id = self.valves.tenant_id or "default-tenant"
+
         # Generate trace context for distributed tracing
         trace_id = generate_trace_id()
         root_span_id = generate_span_id()
         trace_start = time.time()
 
-        # Store trace context for this request
+        # Store trace context for this request (including user info for debugging)
         trace_context = {
             "trace_id": trace_id,
             "parent_span_id": root_span_id,
             "operation": "openwebui_tool.at_queue",
             "start_time": trace_start,
             "instruction": instruction[:100],  # Truncate for attribute
+            "user_email": user_email,  # Add for debugging
+            "user_dict_keys": list(user_dict.keys()),  # Add for debugging
+            "tenant_id": tenant_id,  # Add tenant for tracking
         }
 
         instruction_lower = instruction.lower().strip()
@@ -735,7 +818,11 @@ class Tools:
         if task_type.startswith("workflow:"):
             # Create workflow task directly without files
             return await self._create_workflow_task(
-                task_type, instruction, emitter=__event_emitter__, trace_context=trace_context
+                task_type,
+                instruction,
+                emitter=__event_emitter__,
+                trace_context=trace_context,
+                user_dict=user_dict,
             )
 
         # Other task types require files

@@ -43,6 +43,7 @@ def create_subtask(
     input_data: dict[str, Any],
     conn: psycopg2.extensions.connection,
     user_id_hash: str | None = None,
+    tenant_id: str | None = None,
 ) -> str:
     """
     Create a new subtask in the database.
@@ -54,6 +55,7 @@ def create_subtask(
         input_data: Input data for the agent
         conn: Database connection
         user_id_hash: Optional user ID hash for cost tracking
+        tenant_id: Optional tenant ID for multi-tenant isolation
 
     Returns:
         UUID of the created subtask as string
@@ -64,11 +66,19 @@ def create_subtask(
         cur.execute(
             """
             INSERT INTO subtasks (
-                id, parent_task_id, agent_type, iteration, status, input, user_id_hash
+                id, parent_task_id, agent_type, iteration, status, input, user_id_hash, tenant_id
             )
-            VALUES (%s, %s, %s, %s, 'pending', %s, %s)
+            VALUES (%s, %s, %s, %s, 'pending', %s, %s, %s)
             """,
-            (subtask_id, parent_id, agent_type, iteration, Json(input_data), user_id_hash),
+            (
+                subtask_id,
+                parent_id,
+                agent_type,
+                iteration,
+                Json(input_data),
+                user_id_hash,
+                tenant_id,
+            ),
         )
         conn.commit()
 
@@ -176,6 +186,7 @@ def create_workflow_state(
     max_iterations: int,
     conn: psycopg2.extensions.connection,
     state_data: dict[str, Any] | None = None,
+    tenant_id: str | None = None,
 ) -> None:
     """
     Create workflow state for a parent task.
@@ -187,16 +198,24 @@ def create_workflow_state(
         max_iterations: Maximum number of iterations
         conn: Database connection
         state_data: Optional initial state data
+        tenant_id: Optional tenant ID for multi-tenant isolation
     """
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO workflow_state (
-                parent_task_id, workflow_type, current_state, max_iterations, state_data
+                parent_task_id, workflow_type, current_state, max_iterations, state_data, tenant_id
             )
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (parent_id, workflow_type, initial_state, max_iterations, Json(state_data or {})),
+            (
+                parent_id,
+                workflow_type,
+                initial_state,
+                max_iterations,
+                Json(state_data or {}),
+                tenant_id,
+            ),
         )
         conn.commit()
 

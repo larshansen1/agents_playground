@@ -269,6 +269,74 @@ class DatabaseClient:
 
             return dict(row._mapping)
 
+    async def get_tasks_by_user(self, user_id_hash: str) -> list[dict[str, Any]]:
+        """
+        Get all tasks for a specific user.
+
+        Args:
+            user_id_hash: SHA-256 hash of the user's email
+
+        Returns:
+            List of task dictionaries
+        """
+        query = text("""
+            SELECT
+                id, type, status, created_at, updated_at,
+                total_cost, input_tokens, output_tokens, model_used
+            FROM tasks
+            WHERE user_id_hash = :user_id_hash
+            ORDER BY created_at DESC
+        """)
+
+        async with self.async_session() as session:
+            result = await session.execute(query, {"user_id_hash": user_id_hash})
+            rows = result.fetchall()
+            return [dict(row._mapping) for row in rows]
+
+    async def get_subtasks_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        """
+        Get all subtasks for a specific task.
+
+        Args:
+            task_id: UUID of the parent task
+
+        Returns:
+            List of subtask dictionaries
+        """
+        query = text("""
+            SELECT id, agent_type, iteration, status, created_at
+            FROM subtasks
+            WHERE parent_task_id = :task_id
+            ORDER BY created_at ASC
+        """)
+
+        async with self.async_session() as session:
+            result = await session.execute(query, {"task_id": str(task_id)})
+            rows = result.fetchall()
+            return [dict(row._mapping) for row in rows]
+
+    async def get_audit_logs_by_task(self, task_id: str) -> list[dict[str, Any]]:
+        """
+        Get all audit logs for a specific task.
+
+        Args:
+            task_id: UUID of the task
+
+        Returns:
+            List of audit log dictionaries
+        """
+        query = text("""
+            SELECT event_type, timestamp, metadata
+            FROM audit_logs
+            WHERE resource_id = :task_id
+            ORDER BY timestamp ASC
+        """)
+
+        async with self.async_session() as session:
+            result = await session.execute(query, {"task_id": str(task_id)})
+            rows = result.fetchall()
+            return [dict(row._mapping) for row in rows]
+
     async def close(self):
         """Close database connections."""
         await self.engine.dispose()

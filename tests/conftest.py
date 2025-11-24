@@ -45,6 +45,7 @@ class TestTask(TestBase):
 
     # Cost tracking fields
     user_id_hash = Column(String(64))
+    tenant_id = Column(String(100))
     model_used = Column(String(100))
     input_tokens = Column(postgresql.INTEGER)
     output_tokens = Column(postgresql.INTEGER)
@@ -70,6 +71,7 @@ class TestSubtask(TestBase):
 
     # Cost tracking fields
     user_id_hash = Column(String(64))
+    tenant_id = Column(String(100))
     model_used = Column(String(100))
     input_tokens = Column(postgresql.INTEGER)
     output_tokens = Column(postgresql.INTEGER)
@@ -89,8 +91,23 @@ class TestWorkflowState(TestBase):
     max_iterations = Column(postgresql.INTEGER, nullable=False, default=3)
     current_state = Column(String, nullable=False)
     state_data = Column(JSON)
+    tenant_id = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class TestAuditLog(TestBase):
+    """Test AuditLog model compatible with SQLite."""
+
+    __tablename__ = "audit_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    event_type = Column(String, nullable=False)
+    user_id_hash = Column(String(64))
+    tenant_id = Column(String(100))
+    resource_id = Column(String(36))
+    metadata_ = Column("metadata", JSON)
 
 
 @pytest.fixture(scope="session")
