@@ -10,6 +10,10 @@ A modern, async FastAPI-based task management service with mutual TLS authentica
 - **REST API** - Full CRUD operations for task management
 - **WebSocket Support** - Real-time task status updates
 - **Background Worker** - Async task processing with OpenTelemetry instrumentation
+- **User Tracking** - Privacy-preserving user tracking with SHA-256 hashed emails
+- **Multi-Tenancy** - Tenant isolation for environment-based segmentation
+- **Audit Logging** - Immutable audit trail for all operations
+- **Management UI** - Streamlit dashboard with user search and analytics
 - **Open WebUI Integration** - Pre-built tool for chat interface
 - **Docker Compose** - Complete stack deployment
 
@@ -236,11 +240,35 @@ CREATE TABLE tasks (
     input JSONB NOT NULL,
     output JSONB,
     error TEXT,
+    user_id_hash VARCHAR(64),      -- SHA-256 hashed user email
+    tenant_id VARCHAR(100),          -- Environment identifier
+    model_used VARCHAR(100),
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    total_cost DECIMAL(10, 6),
+    generation_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 CREATE INDEX idx_tasks_status ON tasks(status);
+CREATE INDEX idx_tasks_user_hash ON tasks(user_id_hash);
+CREATE INDEX idx_tasks_tenant ON tasks(tenant_id);
+CREATE INDEX idx_tasks_user_tenant ON tasks(user_id_hash, tenant_id);
+
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type VARCHAR(50) NOT NULL,
+    resource_id UUID NOT NULL,
+    user_id_hash VARCHAR(64),
+    tenant_id VARCHAR(100),
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    metadata JSONB
+);
+
+CREATE INDEX idx_audit_user ON audit_logs(user_id_hash);
+CREATE INDEX idx_audit_tenant ON audit_logs(tenant_id);
+CREATE INDEX idx_audit_resource ON audit_logs(resource_id);
 ```
 
 ## Configuration
@@ -406,6 +434,13 @@ The management UI provides three main views:
 - **Direct links to distributed traces in Grafana**
 - Parent/child task relationships for workflows
 
+**4. User Search (👤)**
+- Search by email address to find all user's tasks
+- Privacy-preserving (hashes email for lookup)
+- View user's complete task history
+- Cost analysis per user
+- Audit log trail for troubleshooting
+
 **Key Features:**
 - Auto-refresh every 5 seconds on dashboard
 - Click task IDs to navigate to detailed views
@@ -462,6 +497,123 @@ Example workflow trace shows:
 - Final assessment approval
 
 All under one trace ID for complete visibility!
+
+## User Tracking \u0026 Multi-Tenancy
+
+The system implements privacy-preserving user tracking and tenant isolation for multi-environment deployments.
+
+### User Privacy
+
+**Email Hashing**: User emails are SHA-256 hashed before storage for privacy:
+- Plain email sent to API (only in request body, never stored)
+- API hashes email immediately: `user_id_hash = SHA256(email)`
+- Only the hash is stored in database (tasks, subtasks, audit_logs)
+- No plain emails in database or LLM prompts
+
+**User Search**: Management UI allows searching by email:
+1. Go to Management UI → **👤 User Search**
+2. Enter email address (e.g., `user@example.com`)
+3. System hashes it and queries `user_id_hash`
+4. View all tasks, subtasks, and audit logs for that user
+
+### Multi-Tenancy
+
+**Tenant Isolation**: The `tenant_id` field identifies deployment environments:
+
+**Configuration** (Open WebUI Tool):
+```python
+# In Open WebUI Admin → Workspace → Functions → Task Queue
+# Set the valve:
+tenant_id = "production"  # or "staging", "client-a", etc.
+```
+
+**Database Schema**:
+```sql
+-- All core tables have tenant_id
+ALTER TABLE tasks ADD COLUMN tenant_id VARCHAR(100);
+ALTER TABLE subtasks ADD COLUMN tenant_id VARCHAR(100);
+ALTER TABLE audit_logs ADD COLUMN tenant_id VARCHAR(100);
+ALTER TABLE workflow_state ADD COLUMN tenant_id VARCHAR(100);
+
+-- Indexes for efficient querying
+CREATE INDEX idx_tasks_tenant ON tasks(tenant_id);
+CREATE INDEX idx_tasks_user_tenant ON tasks(user_id_hash, tenant_id);
+```
+
+**Querying by Tenant**:
+```sql
+-- Get all tasks for a tenant
+SELECT * FROM tasks WHERE tenant_id = 'production';
+
+-- Get user tasks within a tenant
+SELECT * FROM tasks
+WHERE tenant_id = 'production'
+  AND user_id_hash = 'hash_value';
+```
+
+### Audit Logging
+
+**Immutable Audit Trail**: All operations are logged to `audit_logs` table:
+
+**Events Tracked**:
+- `task_created` - When task is created via API
+- `task_updated` - When task status or output changes
+- `task_completed` - When task finishes (done or error)
+- `workflow_initialized` - When multi-agent workflow starts
+- `subtask_completed` - When subtask finishes
+
+**Audit Log Schema**:
+```sql
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY,
+    event_type VARCHAR(50) NOT NULL,
+    resource_id UUID NOT NULL,  -- Task/subtask ID
+    user_id_hash VARCHAR(64),
+    tenant_id VARCHAR(100),
+   timestamp TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    metadata JSONB
+);
+```
+
+**Query Examples**:
+```sql
+-- User's activity log
+SELECT event_type, timestamp, metadata
+FROM audit_logs
+WHERE user_id_hash = 'hash_value'
+ORDER BY timestamp DESC;
+
+-- Tenant's audit trail
+SELECT event_type, resource_id, timestamp
+FROM audit_logs
+WHERE tenant_id = 'production'
+  AND timestamp \u003e NOW() - INTERVAL '7 days';
+```
+
+### Management UI Features
+
+**1. Dashboard (📊)**
+- Real-time task monitoring
+- Tenant-based filtering (when configured)
+- User activity summaries
+
+**2. User Search (👤)**
+- Search by email address
+- View all user's tasks across tenants
+- Cost analysis per user
+- Complete audit trail
+
+**3. Cost Analytics (💰)**
+- Per-tenant cost breakdown
+- Per-user cost within tenants
+- Model usage by environment
+
+**Troubleshooting Use Case**:
+1. User reports: "My tasks are failing"
+2. Go to Management UI → User Search
+3. Enter their email
+4. See all their tasks, errors, and audit logs
+5. No need to search by hash manually!
 
 ## Troubleshooting
 
