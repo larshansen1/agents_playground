@@ -20,7 +20,10 @@ tracer = trace.get_tracer(__name__)
 
 def _get_worker_deps():
     """Get worker dependencies to avoid circular import."""
-    from app.worker import notify_api_async, worker_heartbeat
+    from app.worker import (
+        notify_api_async,
+        worker_heartbeat,
+    )
 
     return notify_api_async, worker_heartbeat
 

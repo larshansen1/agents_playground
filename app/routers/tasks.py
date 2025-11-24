@@ -1,3 +1,4 @@
+import hashlib
 import time
 from uuid import UUID
 
@@ -6,6 +7,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.audit import log_task_completed, log_task_created, log_task_updated
 from app.database import get_db
 from app.logging_config import get_logger
 from app.metrics import (
@@ -26,9 +28,6 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 @router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(task_create: TaskCreate, db: AsyncSession = Depends(get_db)) -> TaskResponse:  # noqa: B008
     """Create a new task with trace context for distributed tracing."""
-    import hashlib
-
-    from app.audit import log_task_created
 
     start_time = time.time()
 
@@ -282,7 +281,6 @@ async def update_task(
         update_data_dict["error"] = task.error
 
     # Log audit event for update
-    from app.audit import log_task_completed, log_task_updated
 
     if task.status in ["done", "error"]:
         # Log completion event

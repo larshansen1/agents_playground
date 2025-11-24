@@ -6,7 +6,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.agents.base import Agent
+from app.agents.base import Agent, extract_json
 from app.tasks import SYSTEM_PROMPTS, calculate_cost
 
 # Configure OpenRouter-compatible client
@@ -73,8 +73,6 @@ class AssessmentAgent(Agent):
 
         # Parse response
         try:
-            from app.agents.base import extract_json
-
             output = extract_json(content_str)
         except (json.JSONDecodeError, ImportError):
             # Fallback if model doesn't return JSON
