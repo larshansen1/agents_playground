@@ -76,7 +76,6 @@ services:
 
   task-worker:
     build: .
-    container_name: task-worker
     command: python -m app.worker
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-openwebui}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-openwebui}
