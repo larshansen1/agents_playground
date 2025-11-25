@@ -72,6 +72,7 @@ services:
       - CONTAINER_NAME=task-api
     volumes:
       - prometheus_multiproc_data:/tmp/prometheus_multiproc
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     ports:
       - "8000:8000"
     depends_on:
@@ -95,6 +96,7 @@ services:
       - CONTAINER_NAME=task-worker
     volumes:
       - prometheus_multiproc_data:/tmp/prometheus_multiproc
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       postgres:
         condition: service_healthy
