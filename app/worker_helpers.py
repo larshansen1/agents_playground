@@ -68,7 +68,7 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
         iteration=iteration,
     )
 
-    worker_heartbeat.set_to_current_time()
+    worker_heartbeat.labels(service="worker").set_to_current_time()
 
     with tracer.start_as_current_span(f"process_subtask:{agent_type}", context=trace_ctx) as span:
         span.set_attribute("subtask.id", subtask_id)
@@ -177,7 +177,7 @@ def _process_workflow_task(conn, cur, row):
 
     logger.info("workflow_task_picked", task_id=task_id, task_type=task_type)
 
-    worker_heartbeat.set_to_current_time()
+    worker_heartbeat.labels(service="worker").set_to_current_time()
 
     with tracer.start_as_current_span(f"process_workflow:{task_type}", context=trace_ctx) as span:
         span.set_attribute("task.id", task_id)

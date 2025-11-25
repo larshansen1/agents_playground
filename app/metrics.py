@@ -18,9 +18,9 @@ tasks_completed_total = Counter(
     "tasks_completed_total", "Total tasks completed", ["task_type", "status"]
 )
 
-tasks_pending = Gauge("tasks_pending", "Number of tasks waiting to be processed")
+tasks_pending = Gauge("tasks_pending", "Number of tasks waiting to be processed", ["service"])
 
-tasks_in_flight = Gauge("tasks_in_flight", "Current number of tasks being processed")
+tasks_in_flight = Gauge("tasks_in_flight", "Current number of tasks being processed", ["service"])
 
 task_duration_seconds = Histogram(
     "task_duration_seconds",
@@ -30,7 +30,9 @@ task_duration_seconds = Histogram(
 )
 
 # Worker Metrics
-worker_heartbeat = Gauge("worker_heartbeat_timestamp", "Timestamp of last worker heartbeat")
+worker_heartbeat = Gauge(
+    "worker_heartbeat_timestamp", "Timestamp of last worker heartbeat", ["service"]
+)
 
 worker_tasks_processed = Counter(
     "worker_tasks_processed_total", "Total tasks processed by worker", ["status"]

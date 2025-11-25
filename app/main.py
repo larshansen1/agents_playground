@@ -126,8 +126,8 @@ async def update_metrics_periodically():
                 pending_count = counts.get("pending", 0)
                 running_count = counts.get("running", 0)
 
-                tasks_pending.set(pending_count)
-                tasks_in_flight.set(running_count)
+                tasks_pending.labels(service="api").set(pending_count)
+                tasks_in_flight.labels(service="api").set(running_count)
 
         except Exception as e:
             logger.error(f"Error updating metrics: {e}")

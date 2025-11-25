@@ -90,7 +90,7 @@ def run_worker():  # noqa: PLR0915
     )
 
     # Update heartbeat on startup
-    worker_heartbeat.set_to_current_time()
+    worker_heartbeat.labels(service="worker").set_to_current_time()
 
     # Adaptive polling state
     poll_interval = settings.worker_poll_min_interval_seconds
@@ -263,7 +263,7 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912
     )
 
     # Update heartbeat
-    worker_heartbeat.set_to_current_time()
+    worker_heartbeat.labels(service="worker").set_to_current_time()
 
     # Create span for task processing, using extracted context
     with tracer.start_as_current_span(
