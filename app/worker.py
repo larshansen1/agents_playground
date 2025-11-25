@@ -14,6 +14,7 @@ from psycopg2.extras import Json, RealDictCursor
 from app.audit import log_audit_event
 from app.config import settings
 from app.db_sync import get_connection
+from app.instance import get_instance_name
 from app.logging_config import configure_logging, get_logger
 from app.metrics import (
     active_leases,
@@ -82,15 +83,15 @@ def notify_api_async(
 def run_worker():  # noqa: PLR0915
     """Main worker loop to process tasks with lease-based acquisition."""
     logger.info(
-        "worker_starting",
-        process="task-worker",
+        "worker_started",
         worker_id=WORKER_ID,
-        api_url=API_URL,
+        instance=get_instance_name(),
+        poll_interval=settings.worker_poll_min_interval_seconds,
         lease_duration=settings.worker_lease_duration_seconds,
     )
 
     # Update heartbeat on startup
-    worker_heartbeat.labels(service="worker").set_to_current_time()
+    worker_heartbeat.labels(service="worker", instance=get_instance_name()).set_to_current_time()
 
     # Adaptive polling state
     poll_interval = settings.worker_poll_min_interval_seconds
@@ -220,7 +221,9 @@ def run_worker():  # noqa: PLR0915
                 conn.close()
 
         # Update metrics
-        worker_poll_interval_seconds.labels(worker_id=WORKER_ID).set(poll_interval)
+        worker_poll_interval_seconds.labels(service="worker", instance=get_instance_name()).set(
+            poll_interval
+        )
 
         # Log polling state periodically (only when backing off)
         if not task_found and poll_interval > settings.worker_poll_min_interval_seconds:
@@ -263,7 +266,7 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912
     )
 
     # Update heartbeat
-    worker_heartbeat.labels(service="worker").set_to_current_time()
+    worker_heartbeat.labels(service="worker", instance=get_instance_name()).set_to_current_time()
 
     # Create span for task processing, using extracted context
     with tracer.start_as_current_span(

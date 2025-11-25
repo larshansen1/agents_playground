@@ -8,6 +8,7 @@ from psycopg2.extras import Json
 
 from app.agents import get_agent
 from app.db_utils import aggregate_subtask_costs, get_workflow_state
+from app.instance import get_instance_name
 from app.logging_config import get_logger
 from app.orchestrator import extract_workflow_type, get_orchestrator
 from app.trace_utils import extract_trace_context
@@ -68,7 +69,7 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
         iteration=iteration,
     )
 
-    worker_heartbeat.labels(service="worker").set_to_current_time()
+    worker_heartbeat.labels(service="worker", instance=get_instance_name()).set_to_current_time()
 
     with tracer.start_as_current_span(f"process_subtask:{agent_type}", context=trace_ctx) as span:
         span.set_attribute("subtask.id", subtask_id)
@@ -177,7 +178,7 @@ def _process_workflow_task(conn, cur, row):
 
     logger.info("workflow_task_picked", task_id=task_id, task_type=task_type)
 
-    worker_heartbeat.labels(service="worker").set_to_current_time()
+    worker_heartbeat.labels(service="worker", instance=get_instance_name()).set_to_current_time()
 
     with tracer.start_as_current_span(f"process_workflow:{task_type}", context=trace_ctx) as span:
         span.set_attribute("task.id", task_id)

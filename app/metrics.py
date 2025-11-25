@@ -18,9 +18,13 @@ tasks_completed_total = Counter(
     "tasks_completed_total", "Total tasks completed", ["task_type", "status"]
 )
 
-tasks_pending = Gauge("tasks_pending", "Number of tasks waiting to be processed", ["service"])
+tasks_pending = Gauge(
+    "tasks_pending", "Number of tasks waiting to be processed", ["service", "instance"]
+)
 
-tasks_in_flight = Gauge("tasks_in_flight", "Current number of tasks being processed", ["service"])
+tasks_in_flight = Gauge(
+    "tasks_in_flight", "Current number of tasks being processed", ["service", "instance"]
+)
 
 task_duration_seconds = Histogram(
     "task_duration_seconds",
@@ -31,7 +35,7 @@ task_duration_seconds = Histogram(
 
 # Worker Metrics
 worker_heartbeat = Gauge(
-    "worker_heartbeat_timestamp", "Timestamp of last worker heartbeat", ["service"]
+    "worker_heartbeat_timestamp", "Timestamp of last worker heartbeat", ["service", "instance"]
 )
 
 worker_tasks_processed = Counter(
@@ -54,13 +58,17 @@ tasks_retry_exhausted_total = Counter(
 )
 
 worker_poll_interval_seconds = Gauge(
-    "worker_poll_interval_seconds", "Current polling interval in seconds", ["worker_id"]
+    "worker_poll_interval_seconds", "Current polling interval in seconds", ["service", "instance"]
 )
 
-active_leases = Gauge("active_leases_total", "Number of active task leases", ["worker_id"])
+active_leases = Gauge(
+    "active_leases_total", "Number of active task leases", ["service", "instance"]
+)
 
 # Database Metrics
-db_connections_active = Gauge("db_connections_active", "Number of active database connections")
+db_connections_active = Gauge(
+    "db_connections_active", "Number of active database connections", ["service", "instance"]
+)
 
 db_query_duration_seconds = Histogram(
     "db_query_duration_seconds", "Database query duration in seconds", ["operation"]
@@ -68,7 +76,9 @@ db_query_duration_seconds = Histogram(
 
 # WebSocket Metrics
 websocket_connections_active = Gauge(
-    "websocket_connections_active", "Number of active WebSocket connections"
+    "websocket_connections_active",
+    "Number of active WebSocket connections",
+    ["service", "instance"],
 )
 
 websocket_messages_sent = Counter(

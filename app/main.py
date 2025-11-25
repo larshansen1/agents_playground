@@ -16,6 +16,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import engine
+from app.instance import get_instance_name
 from app.logging_config import configure_logging, get_logger
 from app.metrics import (
     app_info,
@@ -30,6 +31,9 @@ from app.websocket import manager
 # Configure structured logging
 configure_logging(log_level="INFO", json_logs=True)
 logger = get_logger(__name__)
+
+# Get stable instance identifier
+INSTANCE = get_instance_name()
 
 
 @asynccontextmanager
@@ -126,8 +130,8 @@ async def update_metrics_periodically():
                 pending_count = counts.get("pending", 0)
                 running_count = counts.get("running", 0)
 
-                tasks_pending.labels(service="api").set(pending_count)
-                tasks_in_flight.labels(service="api").set(running_count)
+                tasks_pending.labels(service="api", instance=INSTANCE).set(pending_count)
+                tasks_in_flight.labels(service="api", instance=INSTANCE).set(running_count)
 
         except Exception as e:
             logger.error(f"Error updating metrics: {e}")
@@ -161,7 +165,7 @@ async def metrics():
 async def health():
     """Health check endpoint."""
     ws_count = len(manager.active_connections)
-    websocket_connections_active.set(ws_count)
+    websocket_connections_active.labels(service="api", instance=INSTANCE).set(ws_count)
 
     logger.debug(
         "health_check",
@@ -180,7 +184,7 @@ async def health():
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time task updates."""
     await manager.connect(websocket)
-    websocket_connections_active.inc()
+    websocket_connections_active.labels(service="api", instance=INSTANCE).inc()
 
     logger.info(
         "websocket_connected",
@@ -200,7 +204,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        websocket_connections_active.dec()
+        websocket_connections_active.labels(service="api", instance=INSTANCE).dec()
         logger.info(
             "websocket_disconnected",
             total_connections=len(manager.active_connections),
