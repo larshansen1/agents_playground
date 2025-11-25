@@ -179,4 +179,4 @@ fail_under = 50
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "venv"]
-skips = ["B101"]  # Skip assert_used in tests
+skips = ["B101", "B608"]  # Skip assert_used in tests, allow controlled f-string SQL

@@ -68,6 +68,9 @@ services:
       - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
       - OPENAI_MODEL=${OPENAI_MODEL:-openai/gpt-4o-mini}
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus_multiproc
+    volumes:
+      - prometheus_multiproc_data:/tmp/prometheus_multiproc
     ports:
       - "8000:8000"
     depends_on:
@@ -87,6 +90,9 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
       - OPENAI_MODEL=google/gemini-2.5-flash
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus_multiproc
+    volumes:
+      - prometheus_multiproc_data:/tmp/prometheus_multiproc
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,3 +153,4 @@ volumes:
   open_webui_data:
   tempo_data:
   grafana_data:
+  prometheus_multiproc_data:

@@ -1,7 +1,18 @@
+import asyncio
+import os
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    REGISTRY,
+    CollectorRegistry,
+    generate_latest,
+)
+from prometheus_client.multiprocess import MultiProcessCollector
 from prometheus_fastapi_instrumentator import Instrumentator
+from sqlalchemy import text
 
 from app.config import settings
 from app.database import engine
@@ -20,11 +31,38 @@ from app.websocket import manager
 configure_logging(log_level="INFO", json_logs=True)
 logger = get_logger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Application lifespan context manager."""
+    # Startup
+    logger.info(
+        "application_startup",
+        database=settings.database_url.split("@")[-1]
+        if "@" in settings.database_url
+        else "postgres",
+        websocket_manager="initialized",
+        metrics_endpoint="/metrics",
+    )
+    # Start background metrics update
+    metrics_task = asyncio.create_task(update_metrics_periodically())
+
+    yield
+
+    # Shutdown
+    logger.info("application_shutdown")
+    metrics_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await metrics_task
+    await engine.dispose()
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Task Management API",
     description="Async task management with WebSocket support",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Set up distributed tracing
@@ -70,24 +108,31 @@ app.include_router(tasks.router)
 app.include_router(admin.router)
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Application startup."""
-    logger.info(
-        "application_startup",
-        database=settings.database_url.split("@")[-1]
-        if "@" in settings.database_url
-        else "postgres",
-        websocket_manager="initialized",
-        metrics_endpoint="/metrics",
-    )
+async def update_metrics_periodically():
+    """Update database-derived metrics periodically."""
+    from app.database import AsyncSessionLocal
+    from app.metrics import tasks_in_flight, tasks_pending
 
+    while True:
+        try:
+            async with AsyncSessionLocal() as session:
+                # Query task counts by status
+                result = await session.execute(
+                    text("SELECT status, COUNT(*) FROM tasks GROUP BY status")
+                )
+                counts: dict[str, int] = {row[0]: row[1] for row in result.fetchall()}
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown."""
-    logger.info("application_shutdown")
-    await engine.dispose()
+                # Update metrics
+                pending_count = counts.get("pending", 0)
+                running_count = counts.get("running", 0)
+
+                tasks_pending.set(pending_count)
+                tasks_in_flight.set(running_count)
+
+        except Exception as e:
+            logger.error(f"Error updating metrics: {e}")
+
+        await asyncio.sleep(15)
 
 
 @app.get("/")
@@ -104,6 +149,11 @@ async def root():
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
+    if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
+        registry = CollectorRegistry()
+        MultiProcessCollector(registry)
+        return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 

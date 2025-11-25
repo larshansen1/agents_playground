@@ -444,6 +444,7 @@ The management UI provides three main views:
 
 **Key Features:**
 - Auto-refresh every 5 seconds on dashboard
+```
 - Click task IDs to navigate to detailed views
 - Trace links automatically generated with correct time ranges
 - Multi-agent workflow visibility with subtask breakdown
@@ -453,11 +454,22 @@ The management UI provides three main views:
 **Prometheus**: http://localhost:9090
 
 Available metrics:
-- `tasks_created_total` - Tasks created by type
-- `tasks_processed_total` - Tasks completed by status
-- `worker_heartbeat` - Worker health indicator
-- `http_requests_total` - API request counts
-- Custom spans from OpenTelemetry
+
+| Metric Name | Type | Description |
+|-------------|------|-------------|
+| `tasks_created_total` | Counter | Total tasks created by type |
+| `tasks_completed_total` | Counter | Total tasks completed by type and status |
+| `tasks_pending` | Gauge | Number of tasks waiting to be processed (Queue Depth) |
+| `tasks_in_flight` | Gauge | Current number of tasks being processed |
+| `task_duration_seconds` | Histogram | Task processing duration in seconds |
+| `worker_heartbeat_timestamp` | Gauge | Timestamp of last worker heartbeat |
+| `worker_tasks_processed_total` | Counter | Total tasks processed by worker |
+| `tasks_acquired_total` | Counter | Tasks acquired with lease |
+| `active_leases_total` | Gauge | Number of active task leases |
+| `http_requests_total` | Counter | Total HTTP requests |
+| `http_request_duration_seconds` | Histogram | HTTP request duration in seconds |
+| `db_connections_active` | Gauge | Number of active database connections |
+| `websocket_connections_active` | Gauge | Number of active WebSocket connections |
 
 **OpenTelemetry Collector**: Aggregates traces and metrics from all services
 

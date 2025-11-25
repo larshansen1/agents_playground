@@ -1,8 +1,7 @@
 import os
 import socket
-import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import psycopg2
@@ -19,9 +18,6 @@ from app.logging_config import configure_logging, get_logger
 from app.metrics import (
     active_leases,
     tasks_acquired_total,
-    tasks_lease_renewed_total,
-    tasks_recovered_total,
-    tasks_retry_exhausted_total,
     worker_heartbeat,
     worker_poll_interval_seconds,
 )
@@ -118,7 +114,7 @@ def run_worker():  # noqa: PLR0915
 
             # Calculate lease timeout for new tasks
             lease_duration = timedelta(seconds=settings.worker_lease_duration_seconds)
-            lease_timeout = datetime.now(timezone.utc) + lease_duration
+            lease_timeout = datetime.now(UTC) + lease_duration
 
             # Find a pending subtask (priority to keep workflows moving)
             # Include lease timeout check to recover stalled tasks
@@ -163,8 +159,8 @@ def run_worker():  # noqa: PLR0915
 
                 # Claim the task with lease
                 table = "tasks" if source_type == "task" else "subtasks"
-                cur.execute(  # nosec B608 - table name is controlled internally
-                    f"""
+                cur.execute(
+                    f"""  # nosec B608
                     UPDATE {table}
                     SET status = 'running',
                         locked_at = NOW(),

@@ -1,7 +1,6 @@
 """Helper functions for lease-based task acquisition in worker."""
 
-import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import psycopg2
 
@@ -167,11 +166,11 @@ def renew_lease(conn, task_id: str, source_type: str, worker_id: str) -> bool:
 
     try:
         lease_duration = timedelta(seconds=settings.worker_lease_duration_seconds)
-        new_timeout = datetime.now(timezone.utc) + lease_duration
+        new_timeout = datetime.now(UTC) + lease_duration
 
         table = "tasks" if source_type == "task" else "subtasks"
-        cur.execute(  # nosec B608 - table name is controlled internally
-            f"""
+        cur.execute(
+            f"""  # nosec B608
             UPDATE {table}
             SET lease_timeout = %s,
                 updated_at = NOW()
@@ -192,15 +191,14 @@ def renew_lease(conn, task_id: str, source_type: str, worker_id: str) -> bool:
                 worker_id=worker_id,
             )
             return True
-        else:
-            logger.warning(
-                "lease_renewal_failed",
-                task_id=task_id,
-                source_type=source_type,
-                worker_id=worker_id,
-                reason="task_not_found_or_wrong_owner",
-            )
-            return False
+        logger.warning(
+            "lease_renewal_failed",
+            task_id=task_id,
+            source_type=source_type,
+            worker_id=worker_id,
+            reason="task_not_found_or_wrong_owner",
+        )
+        return False
 
     except psycopg2.Error as e:
         logger.error(

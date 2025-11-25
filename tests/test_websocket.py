@@ -12,7 +12,6 @@ from app.schemas import TaskStatusUpdate
 from app.websocket import manager
 
 
-@pytest.mark.asyncio
 class TestWebSocketManager:
     """Tests for WebSocket connection manager."""
 
@@ -20,6 +19,7 @@ class TestWebSocketManager:
         """Test manager initializes with empty connections."""
         assert isinstance(manager.active_connections, set)
 
+    @pytest.mark.asyncio
     async def test_broadcast_with_no_connections(self):
         """Test broadcast with no active connections doesn't error."""
         # Should not raise an error

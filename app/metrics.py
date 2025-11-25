@@ -18,6 +18,8 @@ tasks_completed_total = Counter(
     "tasks_completed_total", "Total tasks completed", ["task_type", "status"]
 )
 
+tasks_pending = Gauge("tasks_pending", "Number of tasks waiting to be processed")
+
 tasks_in_flight = Gauge("tasks_in_flight", "Current number of tasks being processed")
 
 task_duration_seconds = Histogram(

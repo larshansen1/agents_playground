@@ -1,11 +1,9 @@
 """Tests for lease-based task acquisition mechanism."""
 
-import time
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
-from psycopg2.extras import RealDictRow
+import os
+import socket
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
 
 from app.config import settings
 from app.worker_lease import recover_expired_leases, renew_lease
@@ -15,7 +13,7 @@ class TestLeaseAcquisition:
     """Test lease-based task acquisition logic."""
 
     @patch("app.worker_lease.logger")
-    def test_lease_recovery_expired_tasks(self, mock_logger):
+    def test_lease_recovery_expired_tasks(self, mock_logger):  # noqa: ARG002
         """Test recovery of tasks with expired leases."""
         # Mock database connection
         mock_conn = MagicMock()
@@ -193,7 +191,7 @@ class TestRetryLogic:
                 updated_at = NOW()
             WHERE id = %s
             """,
-            (worker_id, datetime.now(timezone.utc), task_id),
+            (worker_id, datetime.now(UTC), task_id),
         )
 
         # After execution, try_count should be incremented
@@ -207,7 +205,7 @@ class TestLeaseTimeout:
 
     def test_lease_timeout_calculation(self):
         """Test lease timeout is correctly calculated."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         lease_duration = timedelta(seconds=settings.worker_lease_duration_seconds)
         expected_timeout = now + lease_duration
 
@@ -221,16 +219,16 @@ class TestLeaseTimeout:
     def test_expired_lease_detection(self):
         """Test detection of expired leases."""
         # Simulate expired lease
-        expired_timeout = datetime.now(timezone.utc) - timedelta(minutes=1)
-        now = datetime.now(timezone.utc)
+        expired_timeout = datetime.now(UTC) - timedelta(minutes=1)
+        now = datetime.now(UTC)
 
         assert expired_timeout < now  # Lease is expired
 
     def test_active_lease_detection(self):
         """Test detection of active (non-expired) leases."""
         # Simulate active lease
-        active_timeout = datetime.now(timezone.utc) + timedelta(minutes=4)
-        now = datetime.now(timezone.utc)
+        active_timeout = datetime.now(UTC) + timedelta(minutes=4)
+        now = datetime.now(UTC)
 
         assert active_timeout > now  # Lease is still active
 
@@ -240,11 +238,8 @@ class TestWorkerIdentity:
 
     @patch("socket.gethostname", return_value="test-host")
     @patch("os.getpid", return_value=1234)
-    def test_worker_id_format(self, mock_pid, mock_hostname):
+    def test_worker_id_format(self, mock_pid, mock_hostname):  # noqa: ARG002
         """Test worker ID has correct format."""
-        import socket
-        import os
-
         worker_id = f"{socket.gethostname()}:{os.getpid()}"
 
         assert worker_id == "test-host:1234"
@@ -314,12 +309,12 @@ class TestLeaseRecoveryIntegration:
         # 2. Worker A crashes (lease expires)
         # 3. Recovery runs
         # 4. Worker B can claim the task
-
-        task = {
+        # We don't need to assign this to a variable if it's not used
+        {
             "id": "task-123",
             "status": "running",
             "locked_by": "worker-a:1",
-            "lease_timeout": datetime.now(timezone.utc) - timedelta(minutes=1),  # Expired
+            "lease_timeout": datetime.now(UTC) - timedelta(minutes=1),  # Expired
             "try_count": 1,
             "max_tries": 3,
         }
