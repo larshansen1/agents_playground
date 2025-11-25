@@ -34,7 +34,8 @@ configure_logging(log_level="INFO", json_logs=True)
 logger = get_logger(__name__)
 
 # API endpoint (internal Docker network)
-API_URL = "http://task-api:8000"
+# API endpoint (internal Docker network)
+API_URL = "https://task-api:8443"
 
 # Worker Identity (hostname:pid)
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
@@ -83,7 +84,8 @@ def notify_api_async(
         payload["error"] = error
 
     try:
-        response = requests.patch(url, json=payload, timeout=5)
+        # Use the CA cert mounted in the container for verification
+        response = requests.patch(url, json=payload, timeout=5, verify="/app/certs/ca-cert.pem")
         response.raise_for_status()
         logger.debug("api_notified", task_id=task_id, status=status)
     except Exception as e:
