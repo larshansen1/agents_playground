@@ -69,6 +69,7 @@ services:
       - OPENAI_MODEL=${OPENAI_MODEL:-openai/gpt-4o-mini}
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus_multiproc
+      - CONTAINER_NAME=task-api
     volumes:
       - prometheus_multiproc_data:/tmp/prometheus_multiproc
     ports:
@@ -91,6 +92,7 @@ services:
       - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
       - OPENAI_MODEL=google/gemini-2.5-flash
       - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus_multiproc
+      - CONTAINER_NAME=task-worker
     volumes:
       - prometheus_multiproc_data:/tmp/prometheus_multiproc
     depends_on:
