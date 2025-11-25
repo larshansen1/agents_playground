@@ -2,6 +2,7 @@ import os
 import socket
 import time
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import psycopg2
@@ -37,6 +38,16 @@ API_URL = "http://task-api:8000"
 
 # Worker Identity (hostname:pid)
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
+
+# Configure Prometheus multiprocess directory per instance to avoid PID collisions
+# All Docker containers have PID 1, so they would overwrite each other's metrics
+# Using separate subdirectories ensures each container writes to unique files
+if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
+    base_dir = Path(os.environ["PROMETHEUS_MULTIPROC_DIR"])
+    instance_dir = base_dir / get_instance_name()
+    instance_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = str(instance_dir)
+    logger.info(f"Prometheus multiprocess directory: {instance_dir}")
 
 # Set up tracing for worker
 setup_tracing(
@@ -158,10 +169,10 @@ def run_worker():  # noqa: PLR0915
                 source_type = row.get("source_type", "task")
                 try_count = row.get("try_count", 0)
 
-                # Claim the task with lease
+                # Claim the task with lease  # nosec B608
                 table = "tasks" if source_type == "task" else "subtasks"
                 cur.execute(
-                    f"""  # nosec B608
+                    f"""
                     UPDATE {table}
                     SET status = 'running',
                         locked_at = NOW(),

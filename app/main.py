@@ -1,6 +1,7 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +35,16 @@ logger = get_logger(__name__)
 
 # Get stable instance identifier
 INSTANCE = get_instance_name()
+
+# Configure Prometheus multiprocess directory per instance to avoid PID collisions
+# All Docker containers have PID 1, so they would overwrite each other's metrics
+# Using separate subdirectories ensures each container writes to unique files
+if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
+    base_dir = Path(os.environ["PROMETHEUS_MULTIPROC_DIR"])
+    instance_dir = base_dir / INSTANCE
+    instance_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = str(instance_dir)
+    logger.info(f"Prometheus multiprocess directory: {instance_dir}")
 
 
 @asynccontextmanager
@@ -154,9 +165,48 @@ async def root():
 async def metrics():
     """Prometheus metrics endpoint."""
     if "PROMETHEUS_MULTIPROC_DIR" in os.environ:
+        logger.info("Metrics: starting collection")
         registry = CollectorRegistry()
-        MultiProcessCollector(registry)
-        return Response(content=generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+        # MultiProcessCollector doesn't scan nested directories, so we use symlinks
+        # to create a flat view of all metric files from all instance subdirectories
+        base_dir = Path(os.environ["PROMETHEUS_MULTIPROC_DIR"]).parent
+        temp_collect_dir = base_dir / "_collect"
+        temp_collect_dir.mkdir(exist_ok=True)
+        logger.info(f"Metrics: created temp dir {temp_collect_dir}")
+
+        try:
+            # Create symlinks to all .db files from all instance subdirectories
+            symlink_count = 0
+            for instance_dir in base_dir.iterdir():
+                if instance_dir.is_dir() and instance_dir.name != "_collect":
+                    for db_file in instance_dir.glob("*.db"):
+                        # Create symlink with instance name prefix to ensure uniqueness
+                        # symlink_name = f"{instance_dir.name}_{db_file.name}"
+                        symlink_name = f"{db_file.stem}_{instance_dir.name.replace('-', '')}.db"
+                        symlink_path = temp_collect_dir / symlink_name
+                        # Remove existing symlink if present
+                        if symlink_path.exists() or symlink_path.is_symlink():
+                            symlink_path.unlink()
+                        symlink_path.symlink_to(db_file)
+                        symlink_count += 1
+            logger.info(f"Metrics: created {symlink_count} symlinks")
+
+            # Point MultiProcessCollector to temp directory with all symlinks
+            original_dir = os.environ["PROMETHEUS_MULTIPROC_DIR"]
+            os.environ["PROMETHEUS_MULTIPROC_DIR"] = str(temp_collect_dir)
+            MultiProcessCollector(registry)
+            os.environ["PROMETHEUS_MULTIPROC_DIR"] = original_dir
+
+            # Generate output BEFORE cleanup
+            output = generate_latest(registry)
+            logger.info(f"Metrics: collection complete, {len(output)} bytes")
+        finally:
+            # Clean up symlinks
+            with suppress(Exception):
+                for symlink in temp_collect_dir.glob("*.db"):
+                    if symlink.is_symlink():
+                        symlink.unlink()
+        return Response(content=output, media_type=CONTENT_TYPE_LATEST)
 
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 

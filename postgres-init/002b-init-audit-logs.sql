@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_type VARCHAR(50) NOT NULL,
-    resource_id UUID NOT NULL,
+    resource_id VARCHAR(36),
     user_id_hash VARCHAR(64),
     tenant_id VARCHAR(100),
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT now(),

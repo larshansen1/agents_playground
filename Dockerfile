@@ -16,5 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY tests/ ./tests/
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application with SSL
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8443", \
+    "--ssl-keyfile", "/app/certs/server-key.pem", \
+    "--ssl-certfile", "/app/certs/server-cert.pem", \
+    "--ssl-ca-certs", "/app/certs/ca-cert.pem"]
