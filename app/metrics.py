@@ -61,9 +61,7 @@ worker_poll_interval_seconds = Gauge(
     "worker_poll_interval_seconds", "Current polling interval in seconds", ["service", "instance"]
 )
 
-active_leases = Gauge(
-    "active_leases_total", "Number of active task leases", ["service", "instance"]
-)
+active_leases = Gauge("active_leases_total", "Number of active task leases", ["worker_id"])
 
 # Database Metrics
 db_connections_active = Gauge(
