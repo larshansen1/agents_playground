@@ -47,6 +47,7 @@ setup_tracing(
     service_name="task-worker",
     use_console=True,  # Keep console for debugging
     otlp_endpoint="tempo:4317",  # Send to Tempo
+    instrument_sql=False,  # Disable SQL tracing to reduce noise from lease queries
 )
 tracer = trace.get_tracer(__name__)
 

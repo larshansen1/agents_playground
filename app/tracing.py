@@ -25,8 +25,12 @@ logger = logging.getLogger(__name__)
 
 
 def setup_tracing(
-    app, service_name: str = "task-api", use_console: bool = True, otlp_endpoint: str | None = None
-):
+    app=None,
+    service_name: str = "task-api",
+    use_console: bool = False,
+    otlp_endpoint: str | None = None,
+    instrument_sql: bool = True,  # New parameter to control SQL instrumentation
+) -> None:
     """
     Set up OpenTelemetry tracing for the application.
 
@@ -118,12 +122,15 @@ def setup_tracing(
     except Exception as e:
         logger.warning(f"Requests instrumentation skipped: {e}")
 
-    # Auto-instrument psycopg2 (for PostgreSQL)
-    try:
-        Psycopg2Instrumentor().instrument()
-        logger.info("Tracing: Psycopg2 instrumented")
-    except Exception as e:
-        logger.warning(f"Psycopg2 instrumentation skipped: {e}")
+    # Auto-instrument psycopg2 (for PostgreSQL) - optional for workers
+    if instrument_sql:
+        try:
+            Psycopg2Instrumentor().instrument()
+            logger.info("Tracing: Psycopg2 instrumented")
+        except Exception as e:
+            logger.warning(f"Psycopg2 instrumentation skipped: {e}")
+    else:
+        logger.info("Tracing: SQL instrumentation disabled (reduces trace noise)")
 
     logger.info(f"✅ Tracing setup complete for {service_name}")
 
