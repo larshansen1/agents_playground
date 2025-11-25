@@ -52,6 +52,13 @@ class TestTask(TestBase):
     total_cost = Column(postgresql.NUMERIC(10, 6))
     generation_id = Column(String(100))
 
+    # Lease-based task acquisition fields
+    locked_at = Column(DateTime(timezone=True))
+    locked_by = Column(String(100))
+    lease_timeout = Column(DateTime(timezone=True))
+    try_count = Column(postgresql.INTEGER, default=0)
+    max_tries = Column(postgresql.INTEGER, default=3)
+
 
 class TestSubtask(TestBase):
     """Test Subtask model compatible with SQLite."""
@@ -77,6 +84,13 @@ class TestSubtask(TestBase):
     output_tokens = Column(postgresql.INTEGER)
     total_cost = Column(postgresql.NUMERIC(10, 6))
     generation_id = Column(String(100))
+
+    # Lease-based task acquisition fields
+    locked_at = Column(DateTime(timezone=True))
+    locked_by = Column(String(100))
+    lease_timeout = Column(DateTime(timezone=True))
+    try_count = Column(postgresql.INTEGER, default=0)
+    max_tries = Column(postgresql.INTEGER, default=3)
 
 
 class TestWorkflowState(TestBase):

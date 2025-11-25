@@ -44,6 +44,27 @@ class Settings(BaseSettings):
     # Observability
     otlp_endpoint: str | None = Field(default=None, validation_alias="OTLP_ENDPOINT")
 
+    # Worker & Lease Configuration
+    worker_lease_duration_seconds: int = Field(
+        default=300, validation_alias="WORKER_LEASE_DURATION_SECONDS"
+    )  # 5 minutes
+    worker_lease_renewal_interval_seconds: int = Field(
+        default=60, validation_alias="WORKER_LEASE_RENEWAL_INTERVAL_SECONDS"
+    )  # Renew every 60s
+    worker_recovery_interval_seconds: int = Field(
+        default=30, validation_alias="WORKER_RECOVERY_INTERVAL_SECONDS"
+    )  # Check for expired leases every 30s
+    worker_max_retries: int = Field(default=3, validation_alias="WORKER_MAX_RETRIES")
+    worker_poll_min_interval_seconds: float = Field(
+        default=0.2, validation_alias="WORKER_POLL_MIN_INTERVAL_SECONDS"
+    )
+    worker_poll_max_interval_seconds: float = Field(
+        default=10.0, validation_alias="WORKER_POLL_MAX_INTERVAL_SECONDS"
+    )
+    worker_poll_backoff_multiplier: float = Field(
+        default=2.0, validation_alias="WORKER_POLL_BACKOFF_MULTIPLIER"
+    )
+
     # Application settings
     app_host: str = "0.0.0.0"  # nosec B104
     app_port: int = 8443

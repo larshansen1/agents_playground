@@ -10,6 +10,7 @@ A modern, async FastAPI-based task management service with mutual TLS authentica
 - **REST API** - Full CRUD operations for task management
 - **WebSocket Support** - Real-time task status updates
 - **Background Worker** - Async task processing with OpenTelemetry instrumentation
+- **Lease-Based Task Acquisition** - Multi-worker safe task claiming with automatic recovery from failures
 - **User Tracking** - Privacy-preserving user tracking with SHA-256 hashed emails
 - **Multi-Tenancy** - Tenant isolation for environment-based segmentation
 - **Audit Logging** - Immutable audit trail for all operations

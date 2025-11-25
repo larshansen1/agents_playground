@@ -31,6 +31,13 @@ class Task(Base):
     total_cost = Column(Numeric(10, 6), default=0)
     generation_id = Column(String(100), nullable=True)
 
+    # Lease-based task acquisition fields
+    locked_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    locked_by = Column(String(100), nullable=True)  # worker_id (hostname:pid)
+    lease_timeout = Column(TIMESTAMP(timezone=True), nullable=True)
+    try_count = Column(Integer, default=0)
+    max_tries = Column(Integer, default=3)
+
     # Relationships for multi-agent workflows
     subtasks: "Mapped[list[Subtask]]" = relationship(
         "Subtask", back_populates="parent_task", cascade="all, delete-orphan"
@@ -74,6 +81,13 @@ class Subtask(Base):
     output_tokens = Column(Integer, default=0)
     total_cost = Column(Numeric(10, 6), default=0)
     generation_id = Column(String(100), nullable=True)
+
+    # Lease-based task acquisition fields
+    locked_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    locked_by = Column(String(100), nullable=True)  # worker_id (hostname:pid)
+    lease_timeout = Column(TIMESTAMP(timezone=True), nullable=True)
+    try_count = Column(Integer, default=0)
+    max_tries = Column(Integer, default=3)
 
     # Relationship
     parent_task: "Mapped[Task]" = relationship("Task", back_populates="subtasks")

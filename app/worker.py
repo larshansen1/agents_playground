@@ -1,4 +1,8 @@
+import os
+import socket
+import threading
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import psycopg2
@@ -9,9 +13,18 @@ from opentelemetry.trace import Status, StatusCode
 from psycopg2.extras import Json, RealDictCursor
 
 from app.audit import log_audit_event
+from app.config import settings
 from app.db_sync import get_connection
 from app.logging_config import configure_logging, get_logger
-from app.metrics import worker_heartbeat
+from app.metrics import (
+    active_leases,
+    tasks_acquired_total,
+    tasks_lease_renewed_total,
+    tasks_recovered_total,
+    tasks_retry_exhausted_total,
+    worker_heartbeat,
+    worker_poll_interval_seconds,
+)
 from app.orchestrator import is_workflow_task
 from app.tasks import execute_task
 from app.trace_utils import extract_trace_context, get_current_trace_id
@@ -24,6 +37,9 @@ logger = get_logger(__name__)
 
 # API endpoint (internal Docker network)
 API_URL = "http://task-api:8000"
+
+# Worker Identity (hostname:pid)
+WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 
 # Set up tracing for worker
 setup_tracing(
@@ -66,27 +82,53 @@ def notify_api_async(
         logger.warning("api_notification_failed", task_id=task_id, error=str(e)[:100])
 
 
-def run_worker():
-    """Main worker loop to process tasks."""
-    logger.info("worker_starting", process="task-worker", api_url=API_URL)
+def run_worker():  # noqa: PLR0915
+    """Main worker loop to process tasks with lease-based acquisition."""
+    logger.info(
+        "worker_starting",
+        process="task-worker",
+        worker_id=WORKER_ID,
+        api_url=API_URL,
+        lease_duration=settings.worker_lease_duration_seconds,
+    )
 
     # Update heartbeat on startup
     worker_heartbeat.set_to_current_time()
 
+    # Adaptive polling state
+    poll_interval = settings.worker_poll_min_interval_seconds
+    last_recovery_check = time.time()
+
     while True:
         conn = None
         cur = None
+        task_found = False
+
         try:
             conn = get_connection()
             cur = conn.cursor(cursor_factory=RealDictCursor)
 
-            # Find a pending task or subtask and lock it
-            # First try to find a subtask (they should be processed first to keep workflows moving)
+            # Periodic lease recovery check
+            if time.time() - last_recovery_check >= settings.worker_recovery_interval_seconds:
+                from app.worker_lease import recover_expired_leases
+
+                recover_expired_leases(conn, WORKER_ID)
+                last_recovery_check = time.time()
+
+            # Calculate lease timeout for new tasks
+            lease_duration = timedelta(seconds=settings.worker_lease_duration_seconds)
+            lease_timeout = datetime.now(timezone.utc) + lease_duration
+
+            # Find a pending subtask (priority to keep workflows moving)
+            # Include lease timeout check to recover stalled tasks
             cur.execute(
                 """
-                SELECT id, parent_task_id, agent_type, iteration, status, input, 'subtask' as source_type
+                SELECT id, parent_task_id, agent_type, iteration, status, input,
+                       try_count, max_tries, 'subtask' as source_type
                 FROM subtasks
                 WHERE status = 'pending'
+                  AND try_count < max_tries
+                  AND (lease_timeout IS NULL OR lease_timeout < NOW())
                 ORDER BY created_at ASC
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
@@ -100,9 +142,11 @@ def run_worker():
                 cur.execute(
                     """
                     SELECT id, type, input, NULL as parent_task_id, NULL as agent_type,
-                           NULL as iteration, 'task' as source_type
+                           NULL as iteration, try_count, max_tries, 'task' as source_type
                     FROM tasks
                     WHERE status = 'pending'
+                      AND try_count < max_tries
+                      AND (lease_timeout IS NULL OR lease_timeout < NOW())
                     ORDER BY created_at ASC
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
@@ -111,25 +155,86 @@ def run_worker():
                 row = cur.fetchone()
 
             if row:
+                task_found = True
+                task_id = str(row["id"])
+                source_type = row.get("source_type", "task")
+                try_count = row.get("try_count", 0)
+
+                # Claim the task with lease
+                table = "tasks" if source_type == "task" else "subtasks"
+                cur.execute(  # nosec B608 - table name is controlled internally
+                    f"""
+                    UPDATE {table}
+                    SET status = 'running',
+                        locked_at = NOW(),
+                        locked_by = %s,
+                        lease_timeout = %s,
+                        try_count = try_count + 1,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (WORKER_ID, lease_timeout, task_id),
+                )
+                conn.commit()
+
+                # Record metrics
+                task_type = row.get("type") or row.get("agent_type", "unknown")
+                tasks_acquired_total.labels(worker_id=WORKER_ID, task_type=task_type).inc()
+                active_leases.labels(worker_id=WORKER_ID).inc()
+
+                logger.info(
+                    "task_acquired",
+                    task_id=task_id,
+                    source_type=source_type,
+                    worker_id=WORKER_ID,
+                    try_count=try_count + 1,
+                    max_tries=row.get("max_tries", 3),
+                    lease_timeout=lease_timeout.isoformat(),
+                )
+
+                # Reset poll interval on successful task acquisition
+                poll_interval = settings.worker_poll_min_interval_seconds
+
+                # Process the task
                 _process_task_row(conn, cur, row)
+
+                # Decrement active leases after processing
+                active_leases.labels(worker_id=WORKER_ID).dec()
+
             else:
-                # No tasks found, sleep for a bit
-                time.sleep(1)
+                # No tasks found - apply adaptive backoff
+                poll_interval = min(
+                    poll_interval * settings.worker_poll_backoff_multiplier,
+                    settings.worker_poll_max_interval_seconds,
+                )
 
         except psycopg2.Error as e:
-            logger.error("database_error", error=str(e))
+            logger.error("database_error", error=str(e), worker_id=WORKER_ID)
             time.sleep(5)
+            poll_interval = settings.worker_poll_min_interval_seconds  # Reset on error
         except Exception as e:
-            logger.error("unexpected_error", error=str(e))
+            logger.error("unexpected_error", error=str(e), worker_id=WORKER_ID)
             time.sleep(5)
+            poll_interval = settings.worker_poll_min_interval_seconds  # Reset on error
         finally:
             if cur:
                 cur.close()
             if conn:
                 conn.close()
 
-        # Short sleep to prevent busy-waiting
-        time.sleep(0.2)
+        # Update metrics
+        worker_poll_interval_seconds.labels(worker_id=WORKER_ID).set(poll_interval)
+
+        # Log polling state periodically (only when backing off)
+        if not task_found and poll_interval > settings.worker_poll_min_interval_seconds:
+            logger.debug(
+                "worker_idle",
+                poll_interval=poll_interval,
+                worker_id=WORKER_ID,
+            )
+
+        # Sleep using current poll interval
+        time.sleep(poll_interval)
 
 
 def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912

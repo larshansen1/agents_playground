@@ -34,6 +34,27 @@ worker_tasks_processed = Counter(
     "worker_tasks_processed_total", "Total tasks processed by worker", ["status"]
 )
 
+# Lease-based acquisition metrics
+tasks_acquired_total = Counter(
+    "tasks_acquired_total", "Tasks acquired with lease", ["worker_id", "task_type"]
+)
+
+tasks_lease_renewed_total = Counter("tasks_lease_renewed_total", "Lease renewals", ["worker_id"])
+
+tasks_recovered_total = Counter(
+    "tasks_recovered_total", "Tasks recovered from expired leases", ["task_type"]
+)
+
+tasks_retry_exhausted_total = Counter(
+    "tasks_retry_exhausted_total", "Tasks that exceeded max retries", ["task_type"]
+)
+
+worker_poll_interval_seconds = Gauge(
+    "worker_poll_interval_seconds", "Current polling interval in seconds", ["worker_id"]
+)
+
+active_leases = Gauge("active_leases_total", "Number of active task leases", ["worker_id"])
+
 # Database Metrics
 db_connections_active = Gauge("db_connections_active", "Number of active database connections")
 
