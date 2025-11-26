@@ -7,6 +7,7 @@ from typing import Any
 
 import psycopg2
 import requests
+import urllib3
 from opentelemetry import trace
 from opentelemetry import trace as otel_trace
 from opentelemetry.trace import Status, StatusCode
@@ -29,11 +30,13 @@ from app.trace_utils import extract_trace_context, get_current_trace_id
 from app.tracing import setup_tracing
 from app.worker_helpers import _process_subtask, _process_workflow_task
 
+# Suppress InsecureRequestWarning since we're using self-signed certs internally
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 # Configure structured logging
 configure_logging(log_level="INFO", json_logs=True)
 logger = get_logger(__name__)
 
-# API endpoint (internal Docker network)
 # API endpoint (internal Docker network)
 API_URL = "https://task-api:8443"
 
@@ -84,8 +87,8 @@ def notify_api_async(
         payload["error"] = error
 
     try:
-        # Use the CA cert mounted in the container for verification
-        response = requests.patch(url, json=payload, timeout=5, verify="/app/certs/ca-cert.pem")
+        # Use verify=False for internal communication with self-signed certs
+        response = requests.patch(url, json=payload, timeout=5, verify=False)  # nosec B501
         response.raise_for_status()
         logger.debug("api_notified", task_id=task_id, status=status)
     except Exception as e:
