@@ -320,6 +320,21 @@ Creates:
 
 See [docs/OPENWEBUI.md](docs/OPENWEBUI.md) for complete integration guide.
 
+## Declarative Workflows
+
+Create multi-agent workflows using YAML without writing Python code:
+
+```yaml
+# app/workflows/my_workflow.yaml
+name: my_workflow
+coordination_type: sequential
+steps:
+  - agent_type: research
+  - agent_type: assessment
+```
+
+See [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for complete workflow guide.
+
 ## Development
 
 ### Local Development
