@@ -59,7 +59,7 @@ class Settings(BaseSettings):
         default=0.2, validation_alias="WORKER_POLL_MIN_INTERVAL_SECONDS"
     )
     worker_poll_max_interval_seconds: float = Field(
-        default=10.0, validation_alias="WORKER_POLL_MAX_INTERVAL_SECONDS"
+        default=1.0, validation_alias="WORKER_POLL_MAX_INTERVAL_SECONDS"
     )
     worker_poll_backoff_multiplier: float = Field(
         default=2.0, validation_alias="WORKER_POLL_BACKOFF_MULTIPLIER"

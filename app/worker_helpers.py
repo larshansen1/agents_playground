@@ -1,6 +1,7 @@
 """Additional worker functions for multi-agent workflows."""
 
 import time
+from typing import Any
 
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
@@ -215,3 +216,102 @@ def _process_workflow_task(conn, cur, row):
             span.set_status(Status(StatusCode.ERROR, error_msg))
             span.record_exception(e)
             logger.error("workflow_initialization_failed", task_id=task_id, error=error_msg)
+
+
+def claim_next_task(conn, cur, worker_id: str, settings: Any) -> dict[str, Any] | None:
+    """
+    Find and claim the next available task or subtask.
+
+    Args:
+        conn: Database connection
+        cur: Database cursor
+        worker_id: ID of the worker claiming the task
+        settings: Application settings
+
+    Returns:
+        Task row dict if found and claimed, None otherwise
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.metrics import active_leases, tasks_acquired_total
+
+    # Calculate lease timeout for new tasks
+    lease_duration = timedelta(seconds=settings.worker_lease_duration_seconds)
+    lease_timeout = datetime.now(UTC) + lease_duration
+
+    # Find a pending subtask (priority to keep workflows moving)
+    # Include lease timeout check to recover stalled tasks
+    cur.execute(
+        """
+        SELECT id, parent_task_id, agent_type, iteration, status, input,
+               try_count, max_tries, 'subtask' as source_type
+        FROM subtasks
+        WHERE status = 'pending'
+          AND try_count < max_tries
+          AND (lease_timeout IS NULL OR lease_timeout < NOW())
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+        """
+    )
+
+    row = cur.fetchone()
+
+    # If no subtasks, try regular tasks
+    if not row:
+        cur.execute(
+            """
+            SELECT id, type, input, NULL as parent_task_id, NULL as agent_type,
+                   NULL as iteration, try_count, max_tries, 'task' as source_type
+            FROM tasks
+            WHERE status = 'pending'
+              AND try_count < max_tries
+              AND (lease_timeout IS NULL OR lease_timeout < NOW())
+            ORDER BY created_at ASC
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+            """
+        )
+        row = cur.fetchone()
+
+    if not row:
+        return None
+
+    # Claim the task
+    task_id = str(row["id"])
+    source_type = row.get("source_type", "task")
+    try_count = row.get("try_count", 0)
+
+    # Claim the task with lease  # nosec B608
+    table = "tasks" if source_type == "task" else "subtasks"
+    cur.execute(
+        f"""
+        UPDATE {table}
+        SET status = 'running',
+            locked_at = NOW(),
+            locked_by = %s,
+            lease_timeout = %s,
+            try_count = try_count + 1,
+            updated_at = NOW()
+        WHERE id = %s
+        """,
+        (worker_id, lease_timeout, task_id),
+    )
+    conn.commit()
+
+    # Record metrics
+    task_type = row.get("type") or row.get("agent_type", "unknown")
+    tasks_acquired_total.labels(worker_id=worker_id, task_type=task_type).inc()
+    active_leases.labels(worker_id=worker_id).inc()
+
+    logger.info(
+        "task_acquired",
+        task_id=task_id,
+        source_type=source_type,
+        worker_id=worker_id,
+        try_count=try_count + 1,
+        max_tries=row.get("max_tries", 3),
+        lease_timeout=lease_timeout.isoformat(),
+    )
+
+    return dict(row)

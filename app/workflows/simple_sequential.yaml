@@ -1,0 +1,10 @@
+name: simple_sequential
+description: Simple sequential workflow for testing
+coordination_type: sequential
+max_iterations: 1
+
+steps:
+  - agent_type: research
+    name: gather_info
+  - agent_type: assessment
+    name: verify_info

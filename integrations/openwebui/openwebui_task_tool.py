@@ -143,16 +143,27 @@ class Tools:
         """Infer task type from user message."""
         message_lower = user_message.lower()
 
-        # Check for workflow keywords first
-        # Check for workflow keywords first
+        # Check for explicit workflow name first (e.g., "@queue simple_sequential ...")
+        # Pattern: workflow_name followed by description
+        # Common workflow names: simple_sequential, research_assessment, etc.
+        words = message_lower.split()
+
+        # Look for known workflow patterns in first few words
+        for word in words[:3]:  # Check first 3 words
+            # Match common workflow naming: snake_case names
+            if "_" in word and word.replace("_", "").replace("-", "").isalnum():
+                # This looks like a workflow name (snake_case or kebab-case)
+                return f"workflow:{word.replace('-', '_')}"
+
+        # Fallback: Check for research keywords (legacy behavior)
         # If "research" or similar is present, assume workflow:research_assessment
-        # even if "assess" is not explicitly mentioned, as it's the only research tool we have.
         if any(
             word in message_lower
             for word in ["research", "investigate", "deep dive", "thorough", "study"]
         ):
             return "workflow:research_assessment"
 
+        # Check for non-workflow task types
         if any(
             word in message_lower
             for word in ["summarize", "summary", "tldr", "key points", "overview"]

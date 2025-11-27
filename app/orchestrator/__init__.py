@@ -1,17 +1,55 @@
 """Orchestrator registry for multi-agent workflows."""
 
-from app.orchestrator.base import Orchestrator
-from app.orchestrator.research_assessment import ResearchAssessmentOrchestrator
+from pathlib import Path
 
-# Registry mapping workflow types to orchestrator classes
+from app.logging_config import get_logger
+from app.orchestrator.base import Orchestrator
+from app.orchestrator.declarative_orchestrator import DeclarativeOrchestrator
+from app.orchestrator.research_assessment import ResearchAssessmentOrchestrator
+from app.workflow_registry import workflow_registry
+
+logger = get_logger(__name__)
+
+# Registry mapping workflow types to coded orchestrator classes
 ORCHESTRATOR_REGISTRY: dict[str, type[Orchestrator]] = {
     "research_assessment": ResearchAssessmentOrchestrator,
 }
 
 
+def load_declarative_workflows() -> None:
+    """
+    Load all declarative workflows from app/workflows directory.
+
+    This is called automatically on module import.
+    """
+    workflows_dir = Path(__file__).parent.parent / "workflows"
+
+    if workflows_dir.exists():
+        try:
+            count = workflow_registry.load_from_directory(workflows_dir)
+            logger.info(
+                "declarative_workflows_loaded",
+                count=count,
+                directory=str(workflows_dir),
+            )
+        except Exception as e:
+            logger.error(
+                "declarative_workflows_load_failed",
+                directory=str(workflows_dir),
+                error=str(e),
+            )
+    else:
+        logger.debug(
+            "workflows_directory_not_found",
+            directory=str(workflows_dir),
+        )
+
+
 def get_orchestrator(workflow_type: str, **kwargs) -> Orchestrator:
     """
     Get an orchestrator instance by workflow type.
+
+    Supports both coded orchestrators and declarative workflows.
 
     Args:
         workflow_type: Type of workflow (e.g., 'research_assessment')
@@ -23,11 +61,27 @@ def get_orchestrator(workflow_type: str, **kwargs) -> Orchestrator:
     Raises:
         ValueError: If workflow type is not registered
     """
-    orchestrator_class = ORCHESTRATOR_REGISTRY.get(workflow_type)
-    if not orchestrator_class:
-        msg = f"Unknown workflow type: {workflow_type}"
-        raise ValueError(msg)
-    return orchestrator_class(**kwargs)
+    # Try coded orchestrators first (backward compatibility)
+    if workflow_type in ORCHESTRATOR_REGISTRY:
+        orchestrator_class = ORCHESTRATOR_REGISTRY[workflow_type]
+        return orchestrator_class(**kwargs)
+
+    # Try declarative workflows
+    # Handle 'declarative:' prefix which is stored in workflow state
+    lookup_type = workflow_type
+    if workflow_type.startswith("declarative:"):
+        lookup_type = workflow_type.split(":", 1)[1]
+
+    if workflow_registry.has(lookup_type):
+        definition = workflow_registry.get(lookup_type)
+        # Note: kwargs are ignored for declarative orchestrators
+        # All config comes from YAML definition
+        return DeclarativeOrchestrator(definition)
+
+    # Not found in either registry
+    available = list(ORCHESTRATOR_REGISTRY.keys()) + workflow_registry.list_all()
+    msg = f"Unknown workflow type: {workflow_type}. " f"Available workflows: {', '.join(available)}"
+    raise ValueError(msg)
 
 
 def is_workflow_task(task_type: str) -> bool:
@@ -61,3 +115,7 @@ def extract_workflow_type(task_type: str) -> str:
         raise ValueError(msg)
 
     return task_type.split(":", 1)[1]
+
+
+# Load declarative workflows on module import
+load_declarative_workflows()

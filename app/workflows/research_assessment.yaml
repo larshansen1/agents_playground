@@ -1,0 +1,11 @@
+name: research_assessment
+description: Iterative research with quality assessment
+coordination_type: iterative_refinement
+max_iterations: 3
+convergence_check: assessment_approved
+
+steps:
+  - agent_type: research
+    name: conduct_research
+  - agent_type: assessment
+    name: evaluate_quality
