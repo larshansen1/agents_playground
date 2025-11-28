@@ -80,7 +80,7 @@ def get_orchestrator(workflow_type: str, **kwargs) -> Orchestrator:
 
     # Not found in either registry
     available = list(ORCHESTRATOR_REGISTRY.keys()) + workflow_registry.list_all()
-    msg = f"Unknown workflow type: {workflow_type}. " f"Available workflows: {', '.join(available)}"
+    msg = f"Unknown workflow type: {workflow_type}. Available workflows: {', '.join(available)}"
     raise ValueError(msg)
 
 

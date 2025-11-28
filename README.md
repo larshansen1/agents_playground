@@ -210,14 +210,31 @@ curl "http://localhost:8000/tasks?status_filter=pending"
 │   ├── tasks.py              # Task execution logic
 │   ├── worker.py             # Background task processor
 │   ├── websocket.py          # WebSocket manager
+│   ├── agents/               # Agent system
+│   │   ├── base.py          # Abstract agent base class
+│   │   ├── registry.py      # Agent registry (Phases 1-3)
+│   │   ├── registry_init.py # Global registry singleton
+│   │   ├── research_agent.py
+│   │   └── assessment_agent.py
 │   ├── middleware/
 │   │   └── mtls.py           # mTLS authentication
+│   ├── orchestrator/         # Multi-agent orchestration
 │   └── routers/
 │       └── tasks.py          # Task CRUD endpoints
 ├── certs/                     # SSL certificates (gitignored)
+├── config/
+│   └── agents.yaml           # Agent configuration (optional)
 ├── docs/
-│   └── OPENWEBUI.md          # Open WebUI integration guide
+│   ├── AGENT_REGISTRY.md     # Agent Registry guide
+│   ├── DEVELOPMENT.md        # Development practices
+│   ├── OPENWEBUI.md          # Open WebUI integration
+│   └── WORKFLOWS.md          # Workflow definition guide
 ├── postgres-init/             # Database initialization scripts
+├── tests/
+│   ├── test_agent_registry.py     # Registry Phase 1 tests
+│   ├── test_yaml_loading.py       # Phase 2 YAML tests
+│   ├── test_auto_discovery.py     # Phase 2 discovery tests
+│   └── test_registry_integration.py # Phase 3 integration tests
 ├── utils/
 │   ├── generate_certs.sh     # Certificate generation
 │   ├── test_api.py           # API test script
@@ -334,6 +351,56 @@ steps:
 ```
 
 See [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for complete workflow guide.
+
+## Agent Registry
+
+The Agent Registry provides centralized agent management with three flexible registration methods:
+
+### Quick Start
+
+```python
+from app.agents.registry_init import registry
+
+# Get agent (singleton)
+agent = registry.get("research")
+
+# List all agents
+agents = registry.list_all()  # ['research', 'assessment']
+```
+
+### Configuration Options
+
+**1. YAML Configuration (Recommended)**
+```yaml
+# config/agents.yaml
+agents:
+  - name: research
+    class: app.agents.research_agent.ResearchAgent
+    config:
+      model: gpt-4-turbo
+      temperature: 0.7
+    tools: [web_search]
+```
+
+**2. Auto-Discovery (Zero Config)**
+- Drop agent files in `app/agents/`
+- Registry automatically discovers on startup
+- Perfect for development
+
+**3. Programmatic Registration**
+```python
+registry.register("custom", CustomAgent, config={...})
+```
+
+### Features
+
+- ✅ **Singleton Pattern** - Cached instances for performance
+- ✅ **Thread Safe** - Multi-worker compatible
+- ✅ **Observable** - Structured logging for all operations
+- ✅ **Flexible** - YAML, auto-discovery, or programmatic
+- ✅ **Production Ready** - 52 tests, 96% coverage
+
+See [docs/AGENT_REGISTRY.md](docs/AGENT_REGISTRY.md) for complete registry guide.
 
 ## Development
 

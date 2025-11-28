@@ -1,0 +1,22 @@
+# Agent Registry Configuration
+# Define agents declaratively instead of in Python code
+
+agents:
+  - name: research
+    class: app.agents.research_agent.ResearchAgent
+    config:
+      model: gpt-4-turbo
+      temperature: 0.7
+    tools:
+      - web_search
+      - document_reader
+    description: "Conducts deep research on topics"
+
+  - name: assessment
+    class: app.agents.assessment_agent.AssessmentAgent
+    config:
+      model: gpt-4-turbo
+      temperature: 0.3
+    tools:
+      - fact_checker
+    description: "Assesses research quality and provides feedback"

@@ -6,6 +6,7 @@ Provides tracing setup for FastAPI backend and task workers.
 from __future__ import annotations
 
 import atexit
+import contextlib
 import logging
 import os
 
@@ -97,9 +98,10 @@ def setup_tracing(
         try:
             provider.force_flush(timeout_millis=10000)  # Wait up to 10s for flush
             provider.shutdown()
-            logger.info("Tracing: Spans flushed and shutdown complete")
         except Exception as e:
-            logger.warning(f"Tracing: Shutdown error: {e}")
+            # Prevent shutdown errors from crashing the app/tests
+            with contextlib.suppress(ValueError):
+                logger.warning(f"Tracing: Shutdown error: {e}")
 
     atexit.register(shutdown_tracing)
 
