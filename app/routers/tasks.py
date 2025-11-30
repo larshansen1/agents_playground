@@ -7,6 +7,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.agents.registry_init import registry as agent_registry
 from app.audit import log_task_completed, log_task_created, log_task_updated
 from app.database import get_db
 from app.logging_config import get_logger
@@ -16,7 +17,13 @@ from app.metrics import (
     tasks_created_total,
 )
 from app.models import Task
-from app.schemas import TaskCreate, TaskResponse, TaskStatusUpdate, TaskUpdate
+from app.schemas import (
+    AgentTaskRequest,
+    TaskCreate,
+    TaskResponse,
+    TaskStatusUpdate,
+    TaskUpdate,
+)
 from app.trace_utils import inject_trace_context
 from app.websocket import manager
 
@@ -101,6 +108,110 @@ async def create_task(task_create: TaskCreate, db: AsyncSession = Depends(get_db
     )
 
     # Broadcast task creation via WebSocket
+    await manager.broadcast(
+        TaskStatusUpdate(
+            task_id=task.id,
+            status=task.status,
+            type=task.type,
+            output=task.output,
+            error=task.error,
+            updated_at=task.updated_at,
+        )
+    )
+
+    return TaskResponse.model_validate(task)
+
+
+@router.post("/agent", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_agent_task(
+    task_request: AgentTaskRequest,
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> TaskResponse:
+    """
+    Create a task for direct agent execution.
+
+    Validates that the requested agent exists in the registry before creating the task.
+    """
+    start_time = time.time()
+
+    # Validate agent exists
+    if not agent_registry.has(task_request.agent_type):
+        available_agents = agent_registry.list_all()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Agent '{task_request.agent_type}' not found. Available agents: {available_agents}",
+        )
+
+    # Extract user and tenant context
+    user_id = task_request.user_id
+    tenant_id = task_request.tenant_id
+
+    # Hash the user_id if provided
+    user_id_hash = None
+    if user_id:
+        user_id_hash = hashlib.sha256(user_id.encode()).hexdigest()
+
+    # Inject trace context
+    if "_trace_context" not in task_request.input:
+        task_input_with_context = inject_trace_context(task_request.input)
+    else:
+        task_input_with_context = task_request.input
+
+    # Inject user context
+    if user_id_hash:
+        task_input_with_context["_user_id_hash"] = user_id_hash
+    if tenant_id:
+        task_input_with_context["_tenant_id"] = tenant_id
+
+    # Create task with specific agent type
+    task_type = f"agent:{task_request.agent_type}"
+
+    task = Task(
+        type=task_type,
+        input=task_input_with_context,
+        status="pending",
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+    )
+
+    db.add(task)
+
+    # Log audit event
+    audit_log = log_task_created(
+        db,
+        task_id=task.id,
+        task_type=task.type,
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+    )
+    db.add(audit_log)
+
+    await db.commit()
+
+    # Reload with relationships
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.subtasks), selectinload(Task.workflow_state))
+        .where(Task.id == task.id)
+    )
+    task = result.scalar_one()
+
+    # Track metrics
+    tasks_created_total.labels(task_type=task.type).inc()
+    duration = time.time() - start_time
+
+    # Log event
+    logger.info(
+        "agent_task_created",
+        task_id=str(task.id),
+        agent_type=task_request.agent_type,
+        status=task.status,
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+        duration_seconds=f"{duration:.3f}",
+    )
+
+    # Broadcast task creation
     await manager.broadcast(
         TaskStatusUpdate(
             task_id=task.id,

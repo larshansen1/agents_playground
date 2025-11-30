@@ -2,8 +2,25 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.agents.registry_init import registry as agent_registry
 from app.database import get_db
+from app.logging_config import get_logger
 from app.models import Task
+from app.schemas import (
+    AgentInfo,
+    AgentListResponse,
+    ToolInfo,
+    ToolListResponse,
+    WorkflowInfo,
+    WorkflowListResponse,
+    WorkflowStepInfo,
+)
+from app.tools.registry_init import tool_registry
+from app.tracing import get_tracer
+from app.workflow_registry import workflow_registry
+
+logger = get_logger(__name__)
+tracer = get_tracer(__name__)
 
 router = APIRouter(
     prefix="/admin",
@@ -63,3 +80,102 @@ async def get_user_usage(user_id_hash: str, db: Session = Depends(get_db)):  # n
             for t in recent_tasks
         ],
     }
+
+
+@router.get("/agents", response_model=AgentListResponse)
+async def list_agents():
+    """List all registered agents."""
+    with tracer.start_as_current_span(
+        "admin.list_agents",
+        attributes={
+            "http.method": "GET",
+            "http.route": "/admin/agents",
+        },
+    ) as span:
+        agents = []
+        for agent_type in agent_registry.list_all():
+            metadata = agent_registry.get_metadata(agent_type)
+            agents.append(
+                AgentInfo(
+                    name=agent_type,
+                    description=metadata.description,
+                    config=metadata.config,
+                    tools=metadata.tools,
+                )
+            )
+
+        span.set_attribute("agent.count", len(agents))
+        logger.info(
+            "registry.api.agents.list",
+            agent_count=len(agents),
+        )
+        return AgentListResponse(agents=agents)
+
+
+@router.get("/tools", response_model=ToolListResponse)
+async def list_tools():
+    """List all registered tools."""
+    with tracer.start_as_current_span(
+        "admin.list_tools",
+        attributes={
+            "http.method": "GET",
+            "http.route": "/admin/tools",
+        },
+    ) as span:
+        tools = []
+        for tool_name in tool_registry.list_all():
+            metadata = tool_registry.get_metadata(tool_name)
+            schema = tool_registry.get_schema(tool_name)
+            tools.append(
+                ToolInfo(
+                    name=tool_name,
+                    description=metadata.description,
+                    schema=schema,
+                )
+            )
+
+        span.set_attribute("tool.count", len(tools))
+        logger.info(
+            "registry.api.tools.list",
+            tool_count=len(tools),
+        )
+        return ToolListResponse(tools=tools)
+
+
+@router.get("/workflows", response_model=WorkflowListResponse)
+async def list_workflows():
+    """List all registered workflows."""
+    with tracer.start_as_current_span(
+        "admin.list_workflows",
+        attributes={
+            "http.method": "GET",
+            "http.route": "/admin/workflows",
+        },
+    ) as span:
+        workflows = []
+        for workflow_name in workflow_registry.list_all():
+            workflow = workflow_registry.get(workflow_name)
+            steps = [
+                WorkflowStepInfo(
+                    name=step.name or step.agent_type,
+                    agent_type=step.agent_type,
+                    description=None,
+                    tools=None,
+                )
+                for step in workflow.steps
+            ]
+            workflows.append(
+                WorkflowInfo(
+                    name=workflow.name,
+                    description=workflow.description,
+                    strategy=workflow.coordination_type,
+                    max_iterations=workflow.max_iterations,
+                    steps=steps,
+                )
+            )
+        span.set_attribute("workflow.count", len(workflows))
+        logger.info(
+            "registry.api.workflows.list",
+            workflow_count=len(workflows),
+        )
+        return WorkflowListResponse(workflows=workflows)

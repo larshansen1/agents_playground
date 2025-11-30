@@ -119,3 +119,69 @@ class TaskStatusUpdate(BaseModel):
     # Cost tracking fields (optional, usually only on completion)
     total_cost: float | None = None
     model_used: str | None = None
+
+
+# Registry Schemas
+
+
+class AgentInfo(BaseModel):
+    """Information about a registered agent."""
+
+    name: str
+    description: str
+    config: dict[str, Any]
+    tools: list[str]
+
+
+class AgentListResponse(BaseModel):
+    """Response for listing agents."""
+
+    agents: list[AgentInfo]
+
+
+class ToolInfo(BaseModel):
+    """Information about a registered tool."""
+
+    name: str
+    description: str
+    schema_info: dict[str, Any] = Field(..., alias="schema")
+
+
+class ToolListResponse(BaseModel):
+    """Response for listing tools."""
+
+    tools: list[ToolInfo]
+
+
+class WorkflowStepInfo(BaseModel):
+    """Information about a workflow step."""
+
+    name: str
+    agent_type: str
+    description: str | None = None
+    tools: list[str] | None = None
+
+
+class WorkflowInfo(BaseModel):
+    """Information about a registered workflow."""
+
+    name: str
+    description: str
+    strategy: str
+    max_iterations: int
+    steps: list[WorkflowStepInfo]
+
+
+class WorkflowListResponse(BaseModel):
+    """Response for listing workflows."""
+
+    workflows: list[WorkflowInfo]
+
+
+class AgentTaskRequest(BaseModel):
+    """Request to execute a specific agent directly."""
+
+    agent_type: str = Field(..., description="Type of agent to execute")
+    input: dict[str, Any] = Field(..., description="Input data for the agent")
+    user_id: str | None = Field(None, description="User ID initiating the task")
+    tenant_id: str | None = Field(None, description="Tenant ID for multi-tenant isolation")
