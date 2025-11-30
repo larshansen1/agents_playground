@@ -9,7 +9,6 @@ requirements: requests, asyncio
 import asyncio
 import os
 import time
-from collections.abc import Callable
 from typing import Any
 
 import requests
@@ -65,7 +64,7 @@ class Tools:
     async def _get_cached_or_fetch(
         self,
         cache_key: str,
-        fetch_func: Callable,
+        fetch_func: Any,
     ) -> Any:
         """Get from cache or fetch from API."""
         now = time.time()

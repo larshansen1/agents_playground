@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "integrations" / "openwebui"))
 
-from discover import Tools
+from openwebui_discover_tool import Tools
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ class TestDiscoverToolIntegration:
     @pytest.mark.asyncio
     async def test_discover_real_backend(self, discover_tool, full_registry_data):
         """Test @discover against mocked backend with full registry."""
-        with patch("discover.requests.get") as mock_get:
+        with patch("openwebui_discover_tool.requests.get") as mock_get:
 
             def side_effect(url, **kwargs):
                 mock_resp = MagicMock()
@@ -159,7 +159,7 @@ class TestDiscoverToolIntegration:
         # Note: Full tracing integration requires OpenTelemetry setup
         # This test verifies the structure is correct for future tracing
 
-        with patch("discover.requests.get") as mock_get:
+        with patch("openwebui_discover_tool.requests.get") as mock_get:
 
             def side_effect(url, **kwargs):
                 mock_resp = MagicMock()
@@ -194,7 +194,7 @@ class TestDiscoverToolIntegration:
         """Test @discover emits UI status updates."""
         emitter = AsyncMock()
 
-        with patch("discover.requests.get") as mock_get:
+        with patch("openwebui_discover_tool.requests.get") as mock_get:
 
             def side_effect(url, **kwargs):
                 mock_resp = MagicMock()
@@ -231,7 +231,7 @@ class TestDiscoverToolIntegration:
     @pytest.mark.asyncio
     async def test_discover_caching_integration(self, discover_tool, full_registry_data):
         """Test that caching works across multiple discover calls."""
-        with patch("discover.requests.get") as mock_get:
+        with patch("openwebui_discover_tool.requests.get") as mock_get:
 
             def side_effect(url, **kwargs):
                 mock_resp = MagicMock()
@@ -266,7 +266,7 @@ class TestDiscoverToolIntegration:
     @pytest.mark.asyncio
     async def test_discover_error_recovery(self, discover_tool):
         """Test discover recovers gracefully from API errors."""
-        with patch("discover.requests.get") as mock_get:
+        with patch("openwebui_discover_tool.requests.get") as mock_get:
             # First call fails
             mock_get.side_effect = Exception("Connection timeout")
 
@@ -290,7 +290,7 @@ class TestDiscoverToolIntegration:
     @pytest.mark.asyncio
     async def test_discover_concurrent_calls(self, discover_tool, full_registry_data):
         """Test discover handles concurrent calls correctly."""
-        with patch("discover.requests.get") as mock_get:
+        with patch("openwebui_discover_tool.requests.get") as mock_get:
 
             def side_effect(url, **kwargs):
                 # Simulate slight delay
