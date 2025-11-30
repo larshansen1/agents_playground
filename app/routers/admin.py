@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+import app.workflow_init  # noqa: F401
 from app.agents.registry_init import registry as agent_registry
 from app.database import get_db
 from app.logging_config import get_logger

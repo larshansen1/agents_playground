@@ -333,7 +333,7 @@ Creates:
 
 1. Access Open WebUI at http://localhost:3000
 2. Install the Task Queue tool from `openwebui_task_tool.py`
-3. Upload documents and use: `@queue summarize this document`
+3. Upload documents and use: `@flow summarize this document`
 
 See [docs/OPENWEBUI.md](docs/OPENWEBUI.md) for complete integration guide.
 
@@ -524,7 +524,7 @@ Full end-to-end distributed tracing from OpenWebUI tool through workflow executi
 **Access Grafana**: http://localhost:3002
 
 **What You Can See:**
-- Complete trace timelines from `@queue` command to final result
+- Complete trace timelines from `@flow` command to final result
 - Multi-agent workflow execution with all iterations
 - Individual agent spans (research, assessment)
 - LLM API call duration and costs
@@ -532,7 +532,7 @@ Full end-to-end distributed tracing from OpenWebUI tool through workflow executi
 
 **Trace Hierarchy Example:**
 ```
-openwebui_tool.at_queue (28s)
+openwebui_tool.at_flow (28s)
 ├─ worker.process_workflow
 ├─ process_subtask:research (7.6s)
 │  └─ llm.openrouter.chat_completion
@@ -541,7 +541,7 @@ openwebui_tool.at_queue (28s)
 ```
 
 **How It Works:**
-1. OpenWebUI tool generates a trace ID for each `@queue` command
+1. OpenWebUI tool generates a trace ID for each `@flow` command
 2. Trace context propagates through API → Worker → Orchestrator → Agents
 3. All spans link to the same trace ID for unified visibility
 4. Grafana Tempo stores traces for querying and visualization

@@ -1,10 +1,10 @@
 """
-title: Task Queue with mTLS (Async Push)
+title: Task Flow with mTLS (Async Push)
 author: lars
-version: 7.2
+version: 8.0
 file_handler: true
-description: Queue delegation system with mTLS support, real-time UI updates, multi-agent workflow support, and distributed tracing.
-requirements: requests, asyncio
+description: Smart task flow system with dynamic workflow selection, mTLS support, real-time UI updates, multi-agent workflow support, and distributed tracing.
+requirements: requests, asyncio, opentelemetry-api, opentelemetry-sdk, structlog
 """
 
 import asyncio
@@ -18,7 +18,38 @@ from pathlib import Path
 from typing import Any
 
 import requests
+import structlog
 from pydantic import BaseModel, Field
+
+logger = structlog.get_logger(__name__)
+
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import Status, StatusCode
+
+    tracer = trace.get_tracer("openwebui.flow")
+except ImportError:
+    # Fallback for when OTel is not available
+    class DummySpan:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def set_attribute(self, k, v):
+            pass
+
+        def set_status(self, status):
+            pass
+
+    class DummyTracer:
+        def start_span(self, name, attributes=None, parent=None):  # noqa: ARG002
+            return DummySpan()
+
+    tracer = DummyTracer()
+    Status = object
+    StatusCode = object
 
 
 # Trace context utilities for distributed tracing
@@ -80,9 +111,14 @@ class Tools:
             default="",
             description="Tenant ID for this Open WebUI environment (e.g., 'production', 'staging', 'client-name'). Used for multi-tenancy and environment isolation. Leave empty to use 'default-tenant'.",
         )
+        cache_ttl_seconds: int = Field(
+            default=60,
+            description="Cache registry data for N seconds",
+        )
 
     def __init__(self):
         self.valves = self.Valves()
+        self._cache: dict[str, tuple[float, Any]] = {}  # key -> (timestamp, data)
 
     def _get_ssl_config(self) -> dict[str, Any]:
         """Get SSL configuration for mTLS requests."""
@@ -139,11 +175,192 @@ class Tools:
         except Exception as e:
             return {"error": str(e), "name": file_name}
 
+    async def _get_cached_or_fetch(
+        self,
+        cache_key: str,
+        fetch_func: Any,
+    ) -> Any:
+        """Get from cache or fetch from API."""
+        now = time.time()
+
+        # Check cache
+        if cache_key in self._cache:
+            timestamp, data = self._cache[cache_key]
+            if now - timestamp < self.valves.cache_ttl_seconds:
+                return data
+
+        # Cache miss - fetch from API
+        data = await fetch_func()
+        self._cache[cache_key] = (now, data)
+        return data
+
+    async def _fetch_workflows(self) -> list[dict]:
+        """Fetch workflows from registry API."""
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                f"{self.valves.task_api_url}/admin/workflows",
+                timeout=10,
+                **self._get_ssl_config(),
+            )
+            response.raise_for_status()
+            workflows: list[dict] = response.json().get("workflows", [])
+            return workflows
+        except requests.exceptions.RequestException as e:
+            # Log error but don't crash - return empty list to allow fallback
+            print(f"Failed to fetch workflows: {e}")
+            return []
+
+    async def _smart_workflow_selection(  # noqa: PLR0915
+        self,
+        instruction: str,
+        __event_emitter__: Any = None,
+    ) -> str:
+        """
+        Dynamically select workflow based on available workflows.
+        """
+        instruction_lower = instruction.lower()
+
+        with tracer.start_span(
+            "openwebui.flow.workflow_selection",
+            attributes={
+                "instruction": instruction[:100],
+            },
+        ) as span:
+            # Fetch workflows (cached)
+            with tracer.start_span(
+                "openwebui.flow.fetch_workflows",
+            ) as fetch_span:
+                workflows = await self._get_cached_or_fetch(
+                    "registry:workflows", self._fetch_workflows
+                )
+                fetch_span.set_attribute("workflows.count", len(workflows))
+
+            # Strategy 1: Exact name match
+            # Check if instruction starts with a workflow name or contains "workflow:name"
+            for workflow in workflows:
+                name = workflow.get("name", "")
+                if not name:
+                    continue
+
+                # Check for explicit "workflow:name" or just "name" at start
+                if f"workflow:{name}" in instruction_lower or instruction_lower.startswith(
+                    (f"@flow {name}", name)
+                ):
+                    span.set_attribute("workflow.selected", name)
+                    span.set_attribute("workflow.selection_strategy", "exact_match")
+
+                    logger.info(
+                        "openwebui.flow.workflow_selected",
+                        instruction=instruction[:100],
+                        workflow_name=name,
+                        selection_strategy="exact_match",
+                        alternatives_count=0,
+                    )
+
+                    await self._emit_status(__event_emitter__, f"Selected workflow: {name}", False)
+                    return f"workflow:{name}"
+
+            # Strategy 2: Keyword matching
+            matches = []
+            for workflow in workflows:
+                name = workflow.get("name", "")
+                desc = workflow.get("description", "").lower()
+
+                # Simple keyword extraction from description
+                keywords = set(re.findall(r"\w+", desc))
+                user_words = set(re.findall(r"\w+", instruction_lower))
+
+                # Calculate overlap
+                overlap = len(keywords & user_words)
+
+                # Boost score if workflow name parts are in user words
+                name_parts = set(name.replace("_", " ").split())
+                if name_parts & user_words:
+                    overlap += 2
+
+                if overlap > 0:
+                    matches.append((workflow, overlap))
+
+            if matches:
+                # Sort by overlap (best match first)
+                matches.sort(key=lambda x: x[1], reverse=True)
+                best_match, score = matches[0]
+                best_name = best_match.get("name", "research_assessment")
+
+                span.set_attribute("workflow.selected", best_name)
+                span.set_attribute("workflow.selection_strategy", "keyword_match")
+                span.set_attribute("workflow.match_score", score)
+
+                logger.info(
+                    "openwebui.flow.workflow_selected",
+                    instruction=instruction[:100],
+                    workflow_name=best_name,
+                    selection_strategy="keyword_match",
+                    match_score=score,
+                    alternatives_count=len(matches) - 1,
+                )
+
+                # Show detailed workflow suggestions if multiple matches
+                if len(matches) > 1:
+                    # Build detailed suggestions message
+                    suggestions = ["📋 **Multiple workflows match your query:**", ""]
+
+                    # Show top 3 matches with details
+                    for idx, (workflow, match_score) in enumerate(matches[:3], 1):
+                        wf_name = workflow.get("name", "unknown")
+                        wf_desc = workflow.get("description", "No description")
+                        suggestions.append(f"{idx}. **{wf_name}** ({match_score} keyword matches)")
+                        suggestions.append(f"   - {wf_desc}")
+                        suggestions.append(f'   - Use: `@flow {wf_name} "your topic"`')
+                        suggestions.append("")
+
+                    # Show which one was auto-selected
+                    suggestions.append(f"**Auto-selected:** {best_name} (best match)")
+                    suggestions.append("")
+                    suggestions.append(f"Proceeding with {best_name} workflow...")
+
+                    # Emit as status message
+                    await self._emit_status(__event_emitter__, "\n".join(suggestions), False)
+                else:
+                    # Single match - show simple message
+                    await self._emit_status(
+                        __event_emitter__, f"Matched workflow: {best_name} (Score: {score})", False
+                    )
+
+                return f"workflow:{best_name}"
+
+            # Strategy 3: Fallback / Legacy Logic
+            # If no dynamic match, fall back to hardcoded inference for legacy types
+            legacy_type = self._infer_task_type(instruction)
+
+            span.set_attribute("workflow.selected", legacy_type)
+            span.set_attribute("workflow.selection_strategy", "fallback_legacy")
+
+            logger.info(
+                "openwebui.flow.workflow_selected",
+                instruction=instruction[:100],
+                workflow_name=legacy_type,
+                selection_strategy="fallback_legacy",
+                alternatives_count=0,
+            )
+
+            # If legacy logic returns the default "summarize_document" but the input looks like research,
+            # we might want to force research_assessment if available.
+            if (
+                legacy_type == "summarize_document"
+                and "research" in instruction_lower
+                and any(w.get("name") == "research_assessment" for w in workflows)
+            ):
+                return "workflow:research_assessment"
+
+            return legacy_type
+
     def _infer_task_type(self, user_message: str) -> str:
         """Infer task type from user message."""
         message_lower = user_message.lower()
 
-        # Check for explicit workflow name first (e.g., "@queue simple_sequential ...")
+        # Check for explicit workflow name first (e.g., "@flow simple_sequential ...")
         # Pattern: workflow_name followed by description
         # Common workflow names: simple_sequential, research_assessment, etc.
         words = message_lower.split()
@@ -485,7 +702,7 @@ class Tools:
                 # If initial_check mode, just return current status text
                 if initial_check:
                     await self._emit_status(emitter, f"Status: {task['status']}", True)
-                    return f"⏳ Task {task_id} is {task['status']}. Use '@queue wait {task_id}' to wait for completion."
+                    return f"⏳ Task {task_id} is {task['status']}. Use '@flow wait {task_id}' to wait for completion."
 
                 # Not complete yet: update UI status
                 poll_count += 1
@@ -511,7 +728,7 @@ class Tools:
 
             # Timeout reached
             await self._emit_status(emitter, "Polling Timed Out", True)
-            return f"⏰ Task {task_id} still processing after {self.valves.max_wait_seconds}s\n\nCheck status: @queue status {task_id}"
+            return f"⏰ Task {task_id} still processing after {self.valves.max_wait_seconds}s\n\nCheck status: @flow status {task_id}"
 
         except requests.exceptions.RequestException as e:
             await self._emit_status(emitter, f"Network Error: {e!s}", True)
@@ -764,7 +981,7 @@ class Tools:
             await self._emit_status(emitter, "Connection Failed", True)
             return f"❌ ERROR creating workflow: {e!s}\n\nMake sure the API is running and mTLS certificates are configured correctly."
 
-    async def at_queue(
+    async def at_flow(
         self,
         instruction: str,
         __event_emitter__: Any = None,
@@ -772,7 +989,7 @@ class Tools:
         __user__: dict | None = None,  # User context from Open WebUI
     ) -> str:
         """
-        Main entry point for @queue commands (ASYNC).
+        Main entry point for @flow commands (ASYNC).
         """
         # Extract user context from parameter (Open WebUI v0.6.x passes it as parameter)
         user_dict = __user__ or {}
@@ -791,7 +1008,7 @@ class Tools:
         trace_context = {
             "trace_id": trace_id,
             "parent_span_id": root_span_id,
-            "operation": "openwebui_tool.at_queue",
+            "operation": "openwebui_tool.at_flow",
             "start_time": trace_start,
             "instruction": instruction[:100],  # Truncate for attribute
             "user_email": user_email,  # Add for debugging
@@ -823,7 +1040,9 @@ class Tools:
 
         # Create new task
         files = __files__ or []
-        task_type = self._infer_task_type(instruction)
+
+        # Use smart workflow selection
+        task_type = await self._smart_workflow_selection(instruction, __event_emitter__)
 
         # Workflow tasks don't require files
         if task_type.startswith("workflow:"):

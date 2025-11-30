@@ -67,7 +67,7 @@ Override environment variables via the tool's UI:
 
 Upload a file and use:
 ```
-@queue summarize this document
+@flow summarize this document
 ```
 
 The tool will:
@@ -78,7 +78,7 @@ The tool will:
 ### Check Task Status
 
 ```
-@queue status 094a2531-2349-41f8-9b69-ec53c71d69fc
+@flow status 094a2531-2349-41f8-9b69-ec53c71d69fc
 ```
 
 Returns current status immediately.
@@ -86,7 +86,7 @@ Returns current status immediately.
 ### Wait for Completion
 
 ```
-@queue wait 094a2531-2349-41f8-9b69-ec53c71d69fc
+@flow wait 094a2531-2349-41f8-9b69-ec53c71d69fc
 ```
 
 Polls until task is complete (up to 5 minutes by default).
@@ -98,7 +98,7 @@ Polls until task is complete (up to 5 minutes by default).
 If you prefer manual status checking:
 1. Set `auto_wait_for_completion` to `false` in Valves
 2. Tasks will queue but not auto-wait
-3. Use `@queue wait <id>` when ready
+3. Use `@flow wait <id>` when ready
 
 ### Adjust Polling
 
@@ -138,7 +138,7 @@ TASK_API_URL=https://your-server-ip:8443  # Requires mTLS
 ### Test Connection
 
 ```
-@queue status test-connection
+@flow status test-connection
 ```
 
 **Expected response** (good - means mTLS works):
@@ -155,7 +155,7 @@ ERROR creating task: SSL certificate verify failed
 
 Upload a simple text file and run:
 ```
-@queue summarize this file
+@flow summarize this file
 ```
 
 Should create task and wait for completion.
@@ -206,7 +206,7 @@ Should create task and wait for completion.
 
 ```mermaid
 sequenceDiagram
-    User->>Open WebUI: @queue summarize doc
+    User->>Open WebUI: @flow summarize doc
     Open WebUI->>Tool: Process command
     Tool->>API: POST /tasks (with mTLS)
     API-->>Tool: Task created (pending)
@@ -226,7 +226,7 @@ sequenceDiagram
 ✅ **Smart Polling**: Configurable interval and timeout
 ✅ **Formatted Output**: Pretty formatting for summaries
 ✅ **Error Handling**: Clear error messages
-✅ **Backward Compatible**: Works with existing @queue commands
+✅ **Backward Compatible**: Works with existing @flow commands
 
 ## Security Notes
 

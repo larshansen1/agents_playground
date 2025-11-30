@@ -27,7 +27,7 @@ steps:
 The workflow is **automatically loaded** at startup. Use it via Open WebUI or API:
 
 ```
-@queue my_workflow analyze this document
+@flow my_workflow analyze this document
 ```
 
 Or via API:
