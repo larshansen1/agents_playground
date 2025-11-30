@@ -85,11 +85,12 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Ignore import order in __init__.py files
 "__init__.py" = ["F401", "I001"]
 # Tests can use magic values and have more arguments
-"tests/**/*.py" = ["PLR2004", "PLR0913", "ARG001"]
+"tests/**/*.py" = ["PLR2004", "PLR0913", "ARG001", "ARG002", "PT011", "PLC0415", "PT019"]
 # Circular import avoidance - imports must stay in functions
 "app/worker_helpers.py" = ["PLC0415"]
 "app/worker.py" = ["PLC0415"]
 "app/main.py" = ["PLC0415"]
+"app/agents/base.py" = ["PLC0415"]
 # Complex setup functions
 "app/tracing.py" = ["PLR0915"]
 

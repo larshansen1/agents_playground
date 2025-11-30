@@ -6,8 +6,9 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from config import config
 from data.database import get_db_client
+
+from config import config  # type: ignore[attr-defined]
 
 st.title("💰 Cost Tracking")
 

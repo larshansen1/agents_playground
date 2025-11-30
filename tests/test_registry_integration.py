@@ -50,7 +50,7 @@ def test_get_agent_fallback():
 
 def test_registry_yaml_config_loaded():
     """Test that YAML config is loaded if present."""
-    from pathlib import Path  # noqa: PLC0415
+    from pathlib import Path
 
     yaml_path = Path("config/agents.yaml")
     if not yaml_path.exists():
@@ -84,7 +84,7 @@ def test_unknown_agent_raises_error():
 def test_worker_can_use_registry():
     """Test that worker's get_agent function works with registry."""
     # Simulate what worker does
-    from app.agents import get_agent as worker_get_agent  # noqa: PLC0415
+    from app.agents import get_agent as worker_get_agent
 
     agent = worker_get_agent("research")
     assert agent is not None

@@ -1,0 +1,23 @@
+# Tool Registry Configuration
+# This file defines tools that are auto-loaded by the global tool registry.
+# Tools defined here are immediately available to all agents.
+
+tools:
+  - name: calculator
+    class: app.tools.calculator.CalculatorTool
+    config: {}
+    description: "Perform safe mathematical calculations with +, -, *, /, ** operators"
+
+  - name: web_search
+    class: app.tools.web_search.WebSearchTool
+    config:
+      api_key_env: BRAVE_API_KEY
+      default_max_results: 5
+    description: "Search the web using Brave Search API"
+
+# Add more tools here as needed:
+# - name: document_reader
+#   class: app.tools.document_reader.DocumentReaderTool
+#   config:
+#     timeout: 10
+#   description: "Fetch and extract text from URLs"

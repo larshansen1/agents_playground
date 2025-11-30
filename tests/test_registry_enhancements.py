@@ -107,4 +107,4 @@ def test_registry_performance():
 
     # Test 3: Individual get() should be < 0.1ms (100 microseconds avg)
     per_call_time = get_time / 1000
-    assert per_call_time < 0.001, f"Per-call time {per_call_time*1000:.3f}ms, expected < 1ms"
+    assert per_call_time < 0.001, f"Per-call time {per_call_time * 1000:.3f}ms, expected < 1ms"

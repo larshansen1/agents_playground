@@ -5,8 +5,9 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
-from config import config
 from data.database import get_db_client
+
+from config import config  # type: ignore[attr-defined]
 
 st.title("📊 Task Dashboard")
 

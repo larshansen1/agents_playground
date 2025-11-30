@@ -355,7 +355,7 @@ class MockResearchAgent:
         self.should_fail = should_fail
         self.call_count = 0
 
-    def execute(self, input_data, user_id_hash=None):  # noqa: ARG002
+    def execute(self, input_data, user_id_hash=None):
         """Execute mock research task."""
         self.call_count += 1
 
@@ -398,7 +398,7 @@ class MockAssessmentAgent:
         self.approve_on_iteration = approve_on_iteration
         self.call_count = 0
 
-    def execute(self, input_data, user_id_hash=None):  # noqa: ARG002
+    def execute(self, input_data, user_id_hash=None):
         """Execute mock assessment task."""
         self.call_count += 1
 

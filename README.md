@@ -402,6 +402,65 @@ registry.register("custom", CustomAgent, config={...})
 
 See [docs/AGENT_REGISTRY.md](docs/AGENT_REGISTRY.md) for complete registry guide.
 
+## Tool Registry
+
+The Tool Registry provides centralized tool management for agent capabilities:
+
+### Quick Start
+
+```python
+from app.tools.registry_init import tool_registry
+
+# Get tool (singleton)
+search_tool = tool_registry.get("web_search")
+
+# Execute tool
+result = search_tool.execute(query="Python tutorials")
+print(result["result"]["results"])
+```
+
+### Configuration Options
+
+**1. YAML Configuration (Recommended)**
+```yaml
+# config/tools.yaml
+tools:
+  - name: web_search
+    class: app.tools.web_search.WebSearchTool
+    config:
+      api_key_env: BRAVE_API_KEY
+```
+
+**2. Auto-Discovery (Zero Config)**
+- Drop tool files in `app/tools/`
+- Registry automatically discovers on startup
+
+**3. Programmatic Registration**
+```python
+tool_registry.register("custom_tool", CustomTool, config={...})
+```
+
+### Using Tools in Agents
+
+```python
+from app.agents.base import Agent
+
+class MyAgent(Agent):
+    def __init__(self):
+        super().__init__(
+            agent_type="my_agent",
+            tools=["web_search", "calculator"]
+        )
+
+    def execute(self, input_data, user_id_hash=None):
+        # Execute tool
+        result = self._execute_tool("web_search", query="...")
+        # Use result
+        return {"output": result}
+```
+
+See [docs/TOOL_REGISTRY.md](docs/TOOL_REGISTRY.md) for complete guide.
+
 ## Development
 
 ### Local Development

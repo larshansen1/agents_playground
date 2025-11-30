@@ -43,7 +43,7 @@ def test_discover_skips_already_registered():
     registry = AgentRegistry()
 
     # Manually register research agent
-    from app.agents.research_agent import ResearchAgent  # noqa: PLC0415
+    from app.agents.research_agent import ResearchAgent
 
     registry.register("research", ResearchAgent)
 
@@ -102,7 +102,7 @@ agents:
     assert registry.has("assessment")
 
     # All three methods should coexist
-    from app.agents.assessment_agent import AssessmentAgent  # noqa: PLC0415
+    from app.agents.assessment_agent import AssessmentAgent
 
     registry.register("manual", AssessmentAgent)
 

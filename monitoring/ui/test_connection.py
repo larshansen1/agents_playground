@@ -7,8 +7,9 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
-from config import config
 from data.database import get_db_client
+
+from config import config  # type: ignore[attr-defined]
 
 
 async def test_connection():

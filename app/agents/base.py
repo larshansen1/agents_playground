@@ -43,14 +43,54 @@ class Agent(ABC):
     Each agent has a type identifier and implements the execute method.
     """
 
-    def __init__(self, agent_type: str):
+    def __init__(self, agent_type: str, tools: list[str] | None = None):
         """
         Initialize the agent.
 
         Args:
             agent_type: Unique identifier for this agent type
+            tools: Optional list of tool names this agent can use
         """
         self.agent_type = agent_type
+        self.tools = tools or []
+        self._tool_instances: dict[str, Any] = {}
+
+    def _get_tool(self, tool_name: str) -> Any:
+        """
+        Get tool instance (lazy loading).
+
+        Args:
+            tool_name: Name of the tool to retrieve
+
+        Returns:
+            Tool instance
+
+        Raises:
+            ValueError: If tool not found in registry
+        """
+        if tool_name not in self._tool_instances:
+            from app.tools.registry_init import tool_registry
+
+            self._tool_instances[tool_name] = tool_registry.get(tool_name)
+        return self._tool_instances[tool_name]
+
+    def _execute_tool(self, tool_name: str, **params: Any) -> dict[str, Any]:
+        """
+        Execute a tool with parameters.
+
+        Args:
+            tool_name: Name of the tool to execute
+            **params: Tool-specific parameters
+
+        Returns:
+            dict: Tool execution result in standard format
+
+        Example:
+            >>> result = self._execute_tool("calculator", expression="2 + 2")
+            >>> assert result["success"] is True
+        """
+        tool = self._get_tool(tool_name)
+        return tool.execute(**params)  # type: ignore[no-any-return]
 
     @abstractmethod
     def execute(

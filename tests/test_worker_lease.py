@@ -13,7 +13,7 @@ class TestLeaseAcquisition:
     """Test lease-based task acquisition logic."""
 
     @patch("app.worker_lease.logger")
-    def test_lease_recovery_expired_tasks(self, mock_logger):  # noqa: ARG002
+    def test_lease_recovery_expired_tasks(self, mock_logger):
         """Test recovery of tasks with expired leases."""
         # Mock database connection
         mock_conn = MagicMock()
@@ -238,7 +238,7 @@ class TestWorkerIdentity:
 
     @patch("socket.gethostname", return_value="test-host")
     @patch("os.getpid", return_value=1234)
-    def test_worker_id_format(self, mock_pid, mock_hostname):  # noqa: ARG002
+    def test_worker_id_format(self, mock_pid, mock_hostname):
         """Test worker ID has correct format."""
         worker_id = f"{socket.gethostname()}:{os.getpid()}"
 

@@ -33,8 +33,8 @@ class TestSequentialWorkflowExecution:
     @patch("app.orchestrator.research_assessment.update_workflow_state")
     def test_sequential_workflow_creates_subtasks(
         self,
-        mock_update_state,  # noqa: ARG002
-        mock_get_state,  # noqa: ARG002
+        mock_update_state,
+        mock_get_state,
         mock_create_state,
         mock_create_subtask,
     ):
@@ -76,7 +76,7 @@ class TestSequentialWorkflowExecution:
     def test_research_completion_triggers_assessment(
         self,
         mock_get_subtask,
-        mock_update_state,  # noqa: ARG002
+        mock_update_state,
         mock_get_state,
         mock_create_subtask,
     ):
@@ -177,7 +177,7 @@ class TestIterativeWorkflowRefinement:
         self,
         mock_get_task,
         mock_get_subtask,
-        mock_update_state,  # noqa: ARG002
+        mock_update_state,
         mock_get_state,
         mock_create_subtask,
     ):
@@ -337,9 +337,9 @@ class TestWorkflowCostTracking:
     @patch("app.db_utils.aggregate_subtask_costs")
     def test_cost_aggregation_across_workflow(
         self,
-        mock_aggregate_costs,  # noqa: ARG002
+        mock_aggregate_costs,
         mock_get_subtask,
-        mock_update_state,  # noqa: ARG002
+        mock_update_state,
         mock_get_state,
         mock_create_subtask,
     ):
@@ -423,7 +423,7 @@ class TestWorkflowCostTracking:
         self,
         mock_get_task,
         mock_get_subtask,
-        mock_update_state,  # noqa: ARG002
+        mock_update_state,
         mock_get_state,
         mock_create_subtask,
     ):
@@ -533,7 +533,7 @@ class TestWorkflowAuditLogging:
     @patch("app.audit.log_audit_event")
     def test_workflow_initialization_creates_audit_event(
         self,
-        mock_audit,  # noqa: ARG002
+        mock_audit,
         mock_create_subtask,
         mock_create_state,
     ):

@@ -3,8 +3,9 @@
 import asyncio
 
 import streamlit as st
-from config import config
 from data.database import get_db_client
+
+from config import config  # type: ignore[attr-defined]
 
 # Page configuration
 st.set_page_config(

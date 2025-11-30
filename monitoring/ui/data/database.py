@@ -4,11 +4,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pandas as pd
-from config import config
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
+
+from config import config  # type: ignore[attr-defined]
 
 
 class DatabaseClient:
