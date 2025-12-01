@@ -117,5 +117,38 @@ def extract_workflow_type(task_type: str) -> str:
     return task_type.split(":", 1)[1]
 
 
+def is_agent_task(task_type: str) -> bool:
+    """
+    Check if a task type is a direct agent execution task.
+
+    Args:
+        task_type: Task type string
+
+    Returns:
+        True if this is an agent task (starts with 'agent:')
+    """
+    return task_type.startswith("agent:")
+
+
+def extract_agent_type(task_type: str) -> str:
+    """
+    Extract agent type from task type.
+
+    Args:
+        task_type: Full task type (e.g., 'agent:research')
+
+    Returns:
+        Agent type (e.g., 'research')
+
+    Raises:
+        ValueError: If task_type is not an agent task
+    """
+    if not is_agent_task(task_type):
+        msg = f"Not an agent task: {task_type}"
+        raise ValueError(msg)
+
+    return task_type.split(":", 1)[1]
+
+
 # Load declarative workflows on module import
 load_declarative_workflows()

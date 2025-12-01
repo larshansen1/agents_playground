@@ -23,11 +23,11 @@ from app.metrics import (
     worker_heartbeat,
     worker_poll_interval_seconds,
 )
-from app.orchestrator import is_workflow_task
+from app.orchestrator import is_agent_task, is_workflow_task
 from app.tasks import execute_task
 from app.trace_utils import extract_trace_context, get_current_trace_id
 from app.tracing import setup_tracing
-from app.worker_helpers import _process_subtask, _process_workflow_task
+from app.worker_helpers import _process_agent_task, _process_subtask, _process_workflow_task
 
 # Suppress InsecureRequestWarning since we're using self-signed certs internally
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -208,8 +208,14 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912
     if source_type == "subtask":
         return _process_subtask(conn, cur, row)
 
-    # For regular tasks, check if it's a workflow task
+    # For regular tasks, check task type
     task_type = row["type"]
+
+    # Check if it's an agent task (agent:*)
+    if is_agent_task(task_type):
+        return _process_agent_task(conn, cur, row)
+
+    # Check if it's a workflow task
     if is_workflow_task(task_type):
         return _process_workflow_task(conn, cur, row)
 

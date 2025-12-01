@@ -166,6 +166,102 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
             logger.error("subtask_failed", subtask_id=subtask_id, error=error_msg)
 
 
+def _process_agent_task(conn, cur, row):
+    """Process an agent task by directly executing the specified agent."""
+    notify_api_async, worker_heartbeat = _get_worker_deps()
+
+    task_id = str(row["id"])
+    task_type = row["type"]
+    task_input = row["input"]
+    task_start_time = time.time()
+
+    from app.orchestrator import extract_agent_type
+
+    agent_type = extract_agent_type(task_type)  # Extract 'research' from 'agent:research'
+    trace_ctx, cleaned_input = extract_trace_context(task_input)
+
+    logger.info("agent_task_picked", task_id=task_id, agent_type=agent_type)
+
+    worker_heartbeat.labels(service="worker", instance=get_instance_name()).set_to_current_time()
+
+    with tracer.start_as_current_span(
+        f"process_agent_task:{agent_type}", context=trace_ctx
+    ) as span:
+        span.set_attribute("task.id", task_id)
+        span.set_attribute("task.type", task_type)
+        span.set_attribute("agent.type", agent_type)
+
+        try:
+            cur.execute(
+                "UPDATE tasks SET status = 'running' WHERE id = %s",
+                (task_id,),
+            )
+            conn.commit()
+            notify_api_async(task_id, "running")
+
+            user_id_hash = cleaned_input.pop("_user_id_hash", None)
+            tenant_id = cleaned_input.pop("_tenant_id", None)
+
+            # Execute agent directly
+            agent = get_agent(agent_type)
+            result = agent.execute(cleaned_input, user_id_hash)
+            task_duration = time.time() - task_start_time
+
+            output = result["output"]
+            usage = result.get("usage")
+
+            if usage:
+                cur.execute(
+                    """
+                    UPDATE tasks
+                    SET status = 'done', output = %s, user_id_hash = %s, tenant_id = %s,
+                        model_used = %s, input_tokens = %s, output_tokens = %s,
+                        total_cost = %s, generation_id = %s
+                    WHERE id = %s
+                    """,
+                    (
+                        Json(output),
+                        user_id_hash,
+                        tenant_id,
+                        usage.get("model_used"),
+                        usage.get("input_tokens", 0),
+                        usage.get("output_tokens", 0),
+                        usage.get("total_cost", 0),
+                        usage.get("generation_id"),
+                        task_id,
+                    ),
+                )
+            else:
+                cur.execute(
+                    "UPDATE tasks SET status = 'done', output = %s, user_id_hash = %s, tenant_id = %s WHERE id = %s",
+                    (Json(output), user_id_hash, tenant_id, task_id),
+                )
+            conn.commit()
+            notify_api_async(task_id, "done", output=output)
+
+            span.set_status(Status(StatusCode.OK))
+            logger.info(
+                "agent_task_completed",
+                task_id=task_id,
+                agent_type=agent_type,
+                duration=f"{task_duration:.3f}",
+            )
+
+        except Exception as e:
+            error_msg = str(e)
+            cur.execute(
+                "UPDATE tasks SET status = 'error', error = %s WHERE id = %s",
+                (error_msg, task_id),
+            )
+            conn.commit()
+            notify_api_async(task_id, "error", error=error_msg)
+            span.set_status(Status(StatusCode.ERROR, error_msg))
+            span.record_exception(e)
+            logger.error(
+                "agent_task_failed", task_id=task_id, agent_type=agent_type, error=error_msg
+            )
+
+
 def _process_workflow_task(conn, cur, row):
     """Process a workflow task by delegating to orchestrator."""
     notify_api_async, worker_heartbeat = _get_worker_deps()
