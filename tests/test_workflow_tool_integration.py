@@ -139,7 +139,7 @@ class TestWorkflowToolIntegration:
             # Verify payload structure
             payload = mock_post.call_args[1]["json"]
             assert payload["type"] == "workflow:test_workflow"
-            assert payload["input"]["description"] == "test topic"
+            assert payload["input"]["topic"] == "test topic"
             assert payload["user_id"] == "user-1"
 
     @pytest.mark.asyncio

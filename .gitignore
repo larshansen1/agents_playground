@@ -21,16 +21,38 @@ venv/
 ENV/
 env/
 
-# Testing
+# Pytest
 .pytest_cache/
-.coverage
-.coverage.*
 htmlcov/
+.coverage
+test_results.xml
+
+# Mutation testing
+mutants/
+.mutmut-cache
+mutmut.log
+mutmut_export.json
+mutmut_summary.json
+surviving_mutants.json
+mutant_categories.json
+categorize_survivors.py
+export_for_ai.py
+extract_mutants.py
+
+# Development/debugging files
+debug_mock.py
+test_search.py
+test_tool.py
+fix_tests_*.md
+cov/
 .tox/
 .hypothesis/
 *.cover
 coverage.xml
 *.coveragerc
+
+# Testing
+.coverage.*
 test-results.xml
 .pytest/
 

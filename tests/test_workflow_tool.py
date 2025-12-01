@@ -118,7 +118,7 @@ class TestWorkflowTool:
             # Verify payload
             _args, kwargs = mock_post.call_args
             assert kwargs["json"]["type"] == "workflow:research_assessment"
-            assert kwargs["json"]["input"]["description"] == '"quantum computing"'
+            assert kwargs["json"]["input"]["topic"] == '"quantum computing"'
             assert kwargs["json"]["user_id"] == "user1"
 
     @pytest.mark.asyncio

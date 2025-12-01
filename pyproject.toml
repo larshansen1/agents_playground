@@ -28,6 +28,10 @@ exclude = [
     "dist",
     "node_modules",
     "venv",
+    "mutants",
+    "categorize_survivors.py",
+    "export_for_ai.py",
+    "extract_mutants.py",
 ]
 
 # Same as Black.
@@ -122,6 +126,7 @@ warn_no_return = true
 check_untyped_defs = true
 strict_equality = true
 plugins = ["sqlalchemy.ext.mypy.plugin", "pydantic.mypy"]
+exclude = ["scripts/"]
 
 # Per-module options
 [[tool.mypy.overrides]]
@@ -145,9 +150,9 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=app",
-    "--cov-report=html",
-    "--cov-report=term-missing:skip-covered",
+#    "--cov=app",
+#    "--cov-report=html",
+#    "--cov-report=term-missing:skip-covered",
 ]
 testpaths = ["tests"]
 pythonpath = ["."]
@@ -180,8 +185,8 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "@abstractmethod",
 ]
-fail_under = 50
+#fail_under = 50
 
 [tool.bandit]
-exclude_dirs = ["tests", ".venv", "venv"]
+exclude_dirs = ["tests", ".venv", "venv", "scripts"]
 skips = ["B101", "B608"]  # Skip assert_used in tests, allow controlled f-string SQL

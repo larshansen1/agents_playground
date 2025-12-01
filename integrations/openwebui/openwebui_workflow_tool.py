@@ -114,7 +114,7 @@ class Tools:
         """Create a task for direct workflow execution."""
         payload = {
             "type": f"workflow:{workflow_name}",
-            "input": {"description": task_input},
+            "input": {"topic": task_input},
             "user_id": user_id,
         }
 

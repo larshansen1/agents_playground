@@ -62,6 +62,26 @@ The docker-compose stack includes:
 | **qdrant** | 6333 | Vector database for embeddings |
 | **open-webui** | 3000 | Web UI for chat interface |
 
+### System Architecture
+
+```mermaid
+graph TD
+    Client[Client / Open WebUI] -->|mTLS| API[Task API]
+    API -->|Async| DB[(PostgreSQL)]
+    API -->|Events| WS[WebSocket Manager]
+    Worker[Task Worker] -->|Poll/Lease| DB
+    Worker -->|Execute| Agents[Agent Registry]
+    Agents -->|Use| Tools[Tool Registry]
+    Agents -->|LLM| OpenRouter[OpenRouter API]
+
+    subgraph Observability
+        API -->|Trace/Metric| OTel[OTel Collector]
+        Worker -->|Trace/Metric| OTel
+        OTel -->|Store| Tempo[Tempo]
+        OTel -->|Store| Prom[Prometheus]
+    end
+```
+
 ### Technology Stack
 
 - **FastAPI** - Modern async web framework
@@ -135,6 +155,17 @@ Content-Type: application/json
   "output": {"summary": "..."}
 }
 ```
+
+### Registry API
+
+The Registry API provides endpoints for discovering agents, tools, and workflows.
+
+- `GET /admin/agents` - List registered agents
+- `GET /admin/tools` - List registered tools
+- `GET /admin/workflows` - List registered workflows
+- `POST /tasks/agent` - Execute agent directly
+
+See [docs/REGISTRY_API.md](docs/REGISTRY_API.md) for complete API documentation.
 
 ### Task Status Values
 
@@ -228,6 +259,9 @@ curl "http://localhost:8000/tasks?status_filter=pending"
 │   ├── AGENT_REGISTRY.md     # Agent Registry guide
 │   ├── DEVELOPMENT.md        # Development practices
 │   ├── OPENWEBUI.md          # Open WebUI integration
+│   ├── OPENWEBUI_TOOLS.md    # Open WebUI tools guide
+│   ├── REGISTRY_API.md       # Registry API documentation
+│   ├── TOOL_REGISTRY.md      # Tool Registry guide
 │   └── WORKFLOWS.md          # Workflow definition guide
 ├── postgres-init/             # Database initialization scripts
 ├── tests/
@@ -336,6 +370,17 @@ Creates:
 3. Upload documents and use: `@flow summarize this document`
 
 See [docs/OPENWEBUI.md](docs/OPENWEBUI.md) for complete integration guide.
+
+### Available Tools
+
+The system provides a suite of tools for Open WebUI:
+
+- **@discover**: Explore available agents, tools, and workflows
+- **@queue**: Smart task submission with dynamic workflow selection
+- **@agent**: Direct agent execution
+- **@workflow**: Direct workflow execution
+
+See [docs/OPENWEBUI_TOOLS.md](docs/OPENWEBUI_TOOLS.md) for a complete user guide and examples.
 
 ## Declarative Workflows
 
