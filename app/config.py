@@ -1,9 +1,15 @@
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False,
+        extra="ignore",
+    )
 
     # Database configuration
     postgres_user: str = Field(default="openwebui", validation_alias="POSTGRES_USER")
@@ -68,11 +74,6 @@ class Settings(BaseSettings):
     # Application settings
     app_host: str = "0.0.0.0"  # nosec B104
     app_port: int = 8443
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
-        extra = "ignore"
 
 
 settings = Settings()

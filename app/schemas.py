@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TaskStatus(str, Enum):
@@ -35,6 +35,8 @@ class TaskUpdate(BaseModel):
 class SubtaskResponse(BaseModel):
     """Schema for subtask response."""
 
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
+
     id: UUID
     parent_task_id: UUID
     agent_type: str
@@ -55,12 +57,11 @@ class SubtaskResponse(BaseModel):
     total_cost: float | None = None
     generation_id: str | None = None
 
-    class Config:
-        from_attributes = True
-
 
 class WorkflowStateResponse(BaseModel):
     """Schema for workflow state response."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     parent_task_id: UUID
@@ -73,12 +74,11 @@ class WorkflowStateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class TaskResponse(BaseModel):
     """Schema for task response."""
+
+    model_config = ConfigDict(from_attributes=True, protected_namespaces=())
 
     id: UUID
     type: str
@@ -102,12 +102,11 @@ class TaskResponse(BaseModel):
     subtasks: list[SubtaskResponse] | None = None
     workflow_state: WorkflowStateResponse | None = None
 
-    class Config:
-        from_attributes = True
-
 
 class TaskStatusUpdate(BaseModel):
     """Schema for WebSocket task status updates."""
+
+    model_config = ConfigDict(protected_namespaces=())
 
     task_id: UUID
     status: str

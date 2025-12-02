@@ -110,14 +110,7 @@ class CalculatorTool(Tool):
         Raises:
             ValueError: If node type is not allowed
         """
-        if isinstance(node, ast.Num):  # Number (Python < 3.8)
-            # ast.Num.n can be complex, but we only support int/float
-            if isinstance(node.n, int | float):
-                return node.n
-            msg = f"Unsupported number type: {type(node.n)}"
-            raise ValueError(msg)
-
-        if isinstance(node, ast.Constant):  # Number (Python >= 3.8)
+        if isinstance(node, ast.Constant):  # Number literals (Python >= 3.8)
             if isinstance(node.value, int | float):
                 return node.value
             msg = f"Unsupported constant type: {type(node.value)}"
