@@ -72,6 +72,17 @@ For each invariant:
 - Lines intentionally uncovered (and why)
 - Invariants now guaranteed by tests
 
+## Phase 5: Post-processing
+
+**Goal:** Run complete testing and linting
+
+Run tests and linting:
+- **Run all tests:** Run all test cases
+- **Run all lints:** Run all linting in pre-commit hooks
+- **Fix any errors:** Fix any failing tests or lintss
+
+
+
 ---
 
 ## Mutation Categories

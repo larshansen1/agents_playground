@@ -95,8 +95,14 @@ def notify_api_async(
         logger.warning("api_notification_failed", task_id=task_id, error=str(e)[:100])
 
 
-def run_worker():  # noqa: PLR0915
-    """Main worker loop to process tasks with lease-based acquisition."""
+def run_worker_legacy():  # noqa: PLR0915
+    """
+    DEPRECATED: Use run_worker() instead.
+    Main worker loop to process tasks with lease-based acquisition.
+    """
+    logger.warning(
+        "Using deprecated run_worker_legacy(). This will be removed in a future release."
+    )
     logger.info(
         "worker_started",
         worker_id=WORKER_ID,
@@ -148,7 +154,7 @@ def run_worker():  # noqa: PLR0915
                 poll_interval = settings.worker_poll_min_interval_seconds
 
                 # Process the task
-                _process_task_row(conn, cur, row)
+                _process_task_row_legacy(conn, cur, row)
 
                 # Decrement active leases after processing
                 active_leases.labels(worker_id=WORKER_ID).dec()
@@ -200,8 +206,11 @@ def run_worker():  # noqa: PLR0915
             time.sleep(0.01)
 
 
-def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912
-    """Process a single task or subtask row from the database."""
+def _process_task_row_legacy(conn, cur, row):  # noqa: PLR0915, PLR0912
+    """
+    DEPRECATED: Use WorkerStateMachine instead.
+    Process a single task or subtask row from the database.
+    """
     source_type = row.get("source_type", "task")
 
     # Route to appropriate handler based on source type
@@ -428,6 +437,15 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912
             logger.debug("trace_flushed", task_id=task_id)
     except Exception as e:
         logger.warning("trace_flush_failed", error=str(e))
+
+
+def run_worker() -> None:
+    """Main entry point for worker process."""
+    from app.worker_state import WorkerStateMachine
+
+    worker_id = get_instance_name()
+    state_machine = WorkerStateMachine(worker_id=worker_id)
+    state_machine.run()
 
 
 if __name__ == "__main__":

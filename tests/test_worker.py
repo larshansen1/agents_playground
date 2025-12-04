@@ -3,7 +3,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.worker import _process_task_row, notify_api_async, run_worker
+from app.worker import (
+    _process_task_row_legacy as _process_task_row,
+)
+from app.worker import (
+    notify_api_async,
+)
+from app.worker import (
+    run_worker_legacy as run_worker,
+)
 
 
 @pytest.fixture
@@ -809,11 +817,16 @@ class TestWorkerLoop:
             task_row = {"id": "task-123", "type": "test", "input": {}}
             mock_claim_next_task.side_effect = [task_row, KeyboardInterrupt()]
 
-            with patch("app.worker._process_task_row"), contextlib.suppress(KeyboardInterrupt):
+            with (
+                patch("app.worker._process_task_row_legacy"),
+                contextlib.suppress(KeyboardInterrupt),
+            ):
                 run_worker()
 
-            # When task found, should sleep briefly (0.01s)
-            assert any(c[0][0] == 0.01 for c in mock_sleep.call_args_list)
+            # Verify brief sleep after task (0.01s)
+            sleep_calls = mock_sleep.call_args_list
+            # Last sleep should be 0.01 (after processing task)
+            assert any(call[0][0] == 0.01 for call in sleep_calls)
 
     @patch("app.worker.time.sleep")
     @patch("app.worker_helpers.claim_next_task")
