@@ -64,7 +64,7 @@ class AssessmentAgent(Agent):
         # Type ignored because OpenAI client types are strict about Iterable but accept lists
         resp = client.chat.completions.create(
             model=MODEL_NAME,
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             temperature=0,  # Deterministic evaluation
             extra_headers=extra_headers if extra_headers else None,
         )

@@ -47,9 +47,9 @@ except ImportError:
         def start_span(self, name, attributes=None, parent=None):  # noqa: ARG002
             return DummySpan()
 
-    tracer = DummyTracer()  # type: ignore[assignment]
-    Status = object  # type: ignore[misc,assignment]
-    StatusCode = object  # type: ignore[misc,assignment]
+    tracer = DummyTracer()
+    Status = object
+    StatusCode = object
 
 
 # Trace context utilities for distributed tracing

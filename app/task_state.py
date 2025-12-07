@@ -570,7 +570,9 @@ class TaskStateMachine:
         return agent.execute(cleaned_input, user_id_hash)
 
     def _process_tool_task_execution(
-        self, cleaned_input: dict, user_id_hash: str | None = None  # noqa: ARG002
+        self,
+        cleaned_input: dict,
+        user_id_hash: str | None = None,  # noqa: ARG002
     ) -> dict:
         """Execute a tool task directly.
 

@@ -69,7 +69,7 @@ class ResearchAgent(Agent):
         # Call LLM
         resp = client.chat.completions.create(
             model=MODEL_NAME,
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             temperature=0.3,  # Slightly higher for creative research
             extra_headers=extra_headers if extra_headers else None,
         )
