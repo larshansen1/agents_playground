@@ -3,7 +3,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 import pytest
 import requests
 
-from integrations.openwebui.openwebui_task_tool import Tools
+from integrations.openwebui.openwebui_flow import Tools
 
 
 @pytest.fixture
@@ -13,7 +13,7 @@ def tools():
 
 @pytest.fixture
 def mock_requests():
-    with patch("integrations.openwebui.openwebui_task_tool.requests") as mock_req:
+    with patch("integrations.openwebui.openwebui_flow.requests") as mock_req:
         # Fix: Ensure requests.exceptions.RequestException is a real exception class
         mock_req.exceptions.RequestException = requests.exceptions.RequestException
         yield mock_req
@@ -21,7 +21,7 @@ def mock_requests():
 
 @pytest.fixture(autouse=True)
 def mock_tracer():
-    with patch("integrations.openwebui.openwebui_task_tool.tracer") as mock:
+    with patch("integrations.openwebui.openwebui_flow.tracer") as mock:
         mock_span = MagicMock()
         mock_span.__enter__.return_value = mock_span
         mock.start_span.return_value = mock_span

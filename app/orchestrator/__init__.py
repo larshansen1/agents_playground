@@ -150,5 +150,38 @@ def extract_agent_type(task_type: str) -> str:
     return task_type.split(":", 1)[1]
 
 
+def is_tool_task(task_type: str) -> bool:
+    """
+    Check if a task type is a direct tool execution task.
+
+    Args:
+        task_type: Task type string
+
+    Returns:
+        True if this is a tool task (starts with 'tool:')
+    """
+    return task_type.startswith("tool:")
+
+
+def extract_tool_type(task_type: str) -> str:
+    """
+    Extract tool type from task type.
+
+    Args:
+        task_type: Full task type (e.g., 'tool:calculator')
+
+    Returns:
+        Tool type (e.g., 'calculator')
+
+    Raises:
+        ValueError: If task_type is not a tool task
+    """
+    if not is_tool_task(task_type):
+        msg = f"Not a tool task: {task_type}"
+        raise ValueError(msg)
+
+    return task_type.split(":", 1)[1]
+
+
 # Load declarative workflows on module import
 load_declarative_workflows()

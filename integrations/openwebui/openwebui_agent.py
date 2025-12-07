@@ -1,5 +1,5 @@
 """
-title: Agent Execution Tool
+title: Agent
 author: system
 version: 1.0
 description: Execute a specific agent directly for a task

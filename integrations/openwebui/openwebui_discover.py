@@ -1,8 +1,9 @@
 """
-title: Registry Discovery Tool
-author: system
-version: 1.0
-description: Discover available agents, tools, and workflows in the backend system
+title: Discover
+author: lars
+version: 3.0
+file_handler: false
+description: Explore available flows, agents, and tools. Use '@discover' to see all resources or '@discover flows/agents/tools' to filter by type. Results are cached for 60 seconds to optimize performance.
 requirements: requests, asyncio
 """
 
@@ -237,7 +238,7 @@ class Tools:
 
         return "\n".join(lines)
 
-    def _format_all(  # noqa: PLR0912
+    def _format_all(  # noqa: PLR0912, PLR0915
         self, agents: list[dict], tools: list[dict], workflows: list[dict]
     ) -> str:
         """Format all resources together."""
@@ -306,9 +307,15 @@ class Tools:
 
         lines.append("\n---\n")
         lines.append("**Usage:**")
-        lines.append('- Execute workflow: `@workflow <workflow_name> "your topic"`')
-        lines.append('- Execute agent: `@agent <agent_name> "your query"`')
-        lines.append('- Queue task: `@queue "your task description"`')
+        lines.append('- Execute flow: `@flow <workflow_name> "topic"` or `@flow "description"`')
+        lines.append('- Execute agent: `@agent <agent_name> "query"`')
+        lines.append("- Execute tool: `@tool <tool_name> <args...>`")
+        lines.append("")
+        lines.append("**Examples:**")
+        lines.append('- `@flow research_assessment "AI safety"`  # Direct workflow')
+        lines.append('- `@flow "research quantum computing"`  # Smart selection')
+        lines.append('- `@agent research "blockchain technology"`')
+        lines.append('- `@tool calculator "2 + 2"`')
 
         return "\n".join(lines)
 

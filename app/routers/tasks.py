@@ -23,7 +23,9 @@ from app.schemas import (
     TaskResponse,
     TaskStatusUpdate,
     TaskUpdate,
+    ToolTaskRequest,
 )
+from app.tools.registry_init import tool_registry
 from app.trace_utils import inject_trace_context
 from app.websocket import manager
 
@@ -205,6 +207,110 @@ async def create_agent_task(
         "agent_task_created",
         task_id=str(task.id),
         agent_type=task_request.agent_type,
+        status=task.status,
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+        duration_seconds=f"{duration:.3f}",
+    )
+
+    # Broadcast task creation
+    await manager.broadcast(
+        TaskStatusUpdate(
+            task_id=task.id,
+            status=task.status,
+            type=task.type,
+            output=task.output,
+            error=task.error,
+            updated_at=task.updated_at,
+        )
+    )
+
+    return TaskResponse.model_validate(task)
+
+
+@router.post("/tool", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_tool_task(
+    task_request: ToolTaskRequest,
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> TaskResponse:
+    """
+    Create a task for direct tool execution.
+
+    Validates that the requested tool exists in the registry before creating the task.
+    """
+    start_time = time.time()
+
+    # Validate tool exists
+    if not tool_registry.has(task_request.tool_name):
+        available_tools = tool_registry.list_all()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Tool '{task_request.tool_name}' not found. Available tools: {available_tools}",
+        )
+
+    # Extract user and tenant context
+    user_id = task_request.user_id
+    tenant_id = task_request.tenant_id
+
+    # Hash the user_id if provided
+    user_id_hash = None
+    if user_id:
+        user_id_hash = hashlib.sha256(user_id.encode()).hexdigest()
+
+    # Inject trace context
+    if "_trace_context" not in task_request.input:
+        task_input_with_context = inject_trace_context(task_request.input)
+    else:
+        task_input_with_context = task_request.input
+
+    # Inject user context
+    if user_id_hash:
+        task_input_with_context["_user_id_hash"] = user_id_hash
+    if tenant_id:
+        task_input_with_context["_tenant_id"] = tenant_id
+
+    # Create task with specific tool type
+    task_type = f"tool:{task_request.tool_name}"
+
+    task = Task(
+        type=task_type,
+        input=task_input_with_context,
+        status="pending",
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+    )
+
+    db.add(task)
+
+    # Log audit event
+    audit_log = log_task_created(
+        db,
+        task_id=task.id,
+        task_type=task.type,
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+    )
+    db.add(audit_log)
+
+    await db.commit()
+
+    # Reload with relationships
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.subtasks), selectinload(Task.workflow_state))
+        .where(Task.id == task.id)
+    )
+    task = result.scalar_one()
+
+    # Track metrics
+    tasks_created_total.labels(task_type=task.type).inc()
+    duration = time.time() - start_time
+
+    # Log event
+    logger.info(
+        "tool_task_created",
+        task_id=str(task.id),
+        tool_name=task_request.tool_name,
         status=task.status,
         user_id_hash=user_id_hash,
         tenant_id=tenant_id,

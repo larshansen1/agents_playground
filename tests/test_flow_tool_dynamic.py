@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 import requests
 
-from integrations.openwebui.openwebui_task_tool import Tools
+from integrations.openwebui.openwebui_flow import Tools
 
 
 @pytest.fixture
@@ -13,13 +13,13 @@ def tools():
 
 @pytest.fixture
 def mock_api():
-    with patch("integrations.openwebui.openwebui_task_tool.requests.get") as mock_get:
+    with patch("integrations.openwebui.openwebui_flow.requests.get") as mock_get:
         yield mock_get
 
 
 @pytest.fixture(autouse=True)
 def mock_tracer():
-    with patch("integrations.openwebui.openwebui_task_tool.tracer") as mock:
+    with patch("integrations.openwebui.openwebui_flow.tracer") as mock:
         mock_span = MagicMock()
         mock_span.__enter__.return_value = mock_span
         mock.start_span.return_value = mock_span

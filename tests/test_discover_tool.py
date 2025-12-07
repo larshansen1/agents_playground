@@ -14,7 +14,7 @@ import requests
 # Add integrations to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "integrations" / "openwebui"))
 
-from openwebui_discover_tool import Tools
+from integrations.openwebui.openwebui_discover import Tools
 
 
 @pytest.fixture
@@ -132,7 +132,7 @@ class TestDiscoverTool:
         self, discover_tool, mock_agents, mock_tools, mock_workflows
     ):
         """Test @discover all returns formatted output."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             # Mock all three API calls
             mock_response = MagicMock()
             mock_response.status_code = 200
@@ -164,7 +164,7 @@ class TestDiscoverTool:
     @pytest.mark.asyncio
     async def test_discover_agents_only(self, discover_tool, mock_agents):
         """Test @discover agents returns only agents."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -183,7 +183,7 @@ class TestDiscoverTool:
     @pytest.mark.asyncio
     async def test_discover_tools_only(self, discover_tool, mock_tools):
         """Test @discover tools returns only tools."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -201,7 +201,7 @@ class TestDiscoverTool:
     @pytest.mark.asyncio
     async def test_discover_workflows_only(self, discover_tool, mock_workflows):
         """Test @discover workflows returns only workflows."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -219,7 +219,7 @@ class TestDiscoverTool:
     @pytest.mark.asyncio
     async def test_discover_empty_registry(self, discover_tool):
         """Test @discover with no resources registered."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -247,7 +247,7 @@ class TestDiscoverTool:
     @pytest.mark.asyncio
     async def test_discover_api_error(self, discover_tool):
         """Test @discover handles API errors gracefully."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_get.side_effect = requests.exceptions.HTTPError("404 Not Found")
 
             result = await discover_tool.discover("agents")
@@ -258,7 +258,7 @@ class TestDiscoverTool:
     @pytest.mark.asyncio
     async def test_discover_network_error(self, discover_tool):
         """Test @discover handles network errors."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_get.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
             result = await discover_tool.discover("tools")
@@ -268,7 +268,7 @@ class TestDiscoverTool:
     @pytest.mark.asyncio
     async def test_discover_invalid_response(self, discover_tool):
         """Test @discover handles malformed API responses."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -288,7 +288,7 @@ class TestDiscoverCaching:
     @pytest.mark.asyncio
     async def test_cache_hit(self, discover_tool, mock_agents):
         """Test cached response returns quickly."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -313,7 +313,7 @@ class TestDiscoverCaching:
     @pytest.mark.asyncio
     async def test_cache_miss(self, discover_tool, mock_agents):
         """Test cache miss fetches from API."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -332,7 +332,7 @@ class TestDiscoverCaching:
         # Set short TTL for testing
         discover_tool.valves.cache_ttl_seconds = 1
 
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -359,7 +359,7 @@ class TestDiscoverCaching:
         self, discover_tool, mock_agents, mock_tools, mock_workflows
     ):
         """Test separate cache per resource type."""
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
 
             def side_effect(url, **kwargs):
                 mock_resp = MagicMock()
@@ -490,7 +490,7 @@ class TestDiscoverEventEmitter:
         """Test that status updates are emitted during discovery."""
         emitter = AsyncMock()
 
-        with patch("openwebui_discover_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_discover.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()

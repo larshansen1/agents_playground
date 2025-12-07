@@ -22,22 +22,21 @@ def mock_cur():
 
 
 @pytest.fixture
-def mock_worker_deps():
-    with patch("app.worker_helpers._get_worker_deps") as mock:
-        notify = MagicMock()
-        heartbeat = MagicMock()
-        mock.return_value = (notify, heartbeat)
-        yield notify, heartbeat
+def mock_notify_api():
+    with patch("app.worker_helpers.notify_api_async") as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_worker_heartbeat():
+    with patch("app.worker_helpers.worker_heartbeat") as mock:
+        yield mock
 
 
 class TestHandleWorkflowCompletion:
-    @patch("app.worker_helpers._get_worker_deps")
-    def test_handle_workflow_completion_complete(self, mock_deps, mock_conn, mock_cur):
-        notify_api_async = MagicMock()
-        mock_deps.return_value = (notify_api_async, MagicMock())
-
+    def test_handle_workflow_completion_complete(self, mock_conn, mock_cur, mock_notify_api):
         _handle_workflow_completion(
-            "complete", "task-1", {"result": "ok"}, mock_conn, mock_cur, notify_api_async
+            "complete", "task-1", {"result": "ok"}, mock_conn, mock_cur, mock_notify_api
         )
 
         # Verify UPDATE tasks SET status='done' executed
@@ -48,15 +47,11 @@ class TestHandleWorkflowCompletion:
         assert "output = %s" in sql
 
         mock_conn.commit.assert_called_once()
-        notify_api_async.assert_called_once_with("task-1", "done", output={"result": "ok"})
+        mock_notify_api.assert_called_once_with("task-1", "done", output={"result": "ok"})
 
-    @patch("app.worker_helpers._get_worker_deps")
-    def test_handle_workflow_completion_failed(self, mock_deps, mock_conn, mock_cur):
-        notify_api_async = MagicMock()
-        mock_deps.return_value = (notify_api_async, MagicMock())
-
+    def test_handle_workflow_completion_failed(self, mock_conn, mock_cur, mock_notify_api):
         _handle_workflow_completion(
-            "failed", "task-1", {"error": "bad"}, mock_conn, mock_cur, notify_api_async
+            "failed", "task-1", {"error": "bad"}, mock_conn, mock_cur, mock_notify_api
         )
 
         # Verify UPDATE tasks SET status='error' executed
@@ -67,8 +62,8 @@ class TestHandleWorkflowCompletion:
         assert "error = %s" in sql
 
         mock_conn.commit.assert_called_once()
-        notify_api_async.assert_called_once()
-        assert notify_api_async.call_args[0][1] == "error"
+        mock_notify_api.assert_called_once()
+        assert mock_notify_api.call_args[0][1] == "error"
 
 
 class TestSubtaskProcessing:
@@ -84,7 +79,8 @@ class TestSubtaskProcessing:
         mock_get_agent,
         mock_conn,
         mock_cur,
-        mock_worker_deps,
+        mock_notify_api,
+        mock_worker_heartbeat,
     ):
         # Setup
         row = {
@@ -141,7 +137,8 @@ class TestSubtaskProcessing:
         mock_get_agent,
         mock_conn,
         mock_cur,
-        mock_worker_deps,
+        mock_notify_api,
+        mock_worker_heartbeat,
     ):
         row = {
             "id": "sub-1",
@@ -165,11 +162,13 @@ class TestSubtaskProcessing:
         _process_subtask(mock_conn, mock_cur, row)
 
         mock_handle_complete.assert_called_with(
-            "complete", "parent-1", {"final": "result"}, mock_conn, mock_cur, mock_worker_deps[0]
+            "complete", "parent-1", {"final": "result"}, mock_conn, mock_cur, mock_notify_api
         )
 
     @patch("app.worker_helpers.get_agent")
-    def test_process_subtask_failure(self, mock_get_agent, mock_conn, mock_cur, mock_worker_deps):
+    def test_process_subtask_failure(
+        self, mock_get_agent, mock_conn, mock_cur, mock_notify_api, mock_worker_heartbeat
+    ):
         row = {
             "id": "sub-1",
             "parent_task_id": "parent-1",
@@ -196,7 +195,7 @@ class TestSubtaskProcessing:
         assert parent_error, "Parent task should be updated to error"
 
         # Verify notification
-        mock_worker_deps[0].assert_called_with("parent-1", "error", error="Agent failed")
+        mock_notify_api.assert_called_with("parent-1", "error", error="Agent failed")
 
     @patch("app.worker_helpers.get_agent")
     @patch("app.worker_helpers.aggregate_subtask_costs")
@@ -210,7 +209,8 @@ class TestSubtaskProcessing:
         mock_get_agent,
         mock_conn,
         mock_cur,
-        mock_worker_deps,
+        mock_notify_api,
+        mock_worker_heartbeat,
     ):
         row = {
             "id": "sub-1",
@@ -263,7 +263,7 @@ class TestSubtaskProcessing:
 
     @patch("app.worker_helpers.get_agent")
     def test_process_subtask_parent_child_error_updates(
-        self, mock_get_agent, mock_conn, mock_cur, mock_worker_deps
+        self, mock_get_agent, mock_conn, mock_cur, mock_notify_api, mock_worker_heartbeat
     ):
         row = {
             "id": "sub-1",
@@ -303,7 +303,8 @@ class TestSubtaskProcessing:
         mock_get_agent,
         mock_conn,
         mock_cur,
-        mock_worker_deps,
+        mock_notify_api,
+        mock_worker_heartbeat,
     ):
         # Setup row with trace context
         row = {
@@ -340,7 +341,8 @@ class TestSubtaskProcessing:
         mock_get_agent,
         mock_conn,
         mock_cur,
-        mock_worker_deps,
+        mock_notify_api,
+        mock_worker_heartbeat,
     ):
         row = {
             "id": "sub-1",
@@ -372,7 +374,7 @@ class TestSubtaskProcessing:
 class TestAgentTaskProcessing:
     @patch("app.worker_helpers.get_agent")
     def test_process_agent_task_success(
-        self, mock_get_agent, mock_conn, mock_cur, mock_worker_deps
+        self, mock_get_agent, mock_conn, mock_cur, mock_notify_api, mock_worker_heartbeat
     ):
         row = {
             "id": "task-1",
@@ -403,7 +405,7 @@ class TestAgentTaskProcessing:
 
     @patch("app.worker_helpers.get_agent")
     def test_process_agent_task_failure(
-        self, mock_get_agent, mock_conn, mock_cur, mock_worker_deps
+        self, mock_get_agent, mock_conn, mock_cur, mock_notify_api, mock_worker_heartbeat
     ):
         row = {
             "id": "task-1",
@@ -422,11 +424,11 @@ class TestAgentTaskProcessing:
         assert len(error_calls) >= 1
 
         # Verify notification
-        mock_worker_deps[0].assert_called_with("task-1", "error", error="Agent failed")
+        mock_notify_api.assert_called_with("task-1", "error", error="Agent failed")
 
     @patch("app.worker_helpers.get_agent")
     def test_process_agent_task_cost_usage_handling(
-        self, mock_get_agent, mock_conn, mock_cur, mock_worker_deps
+        self, mock_get_agent, mock_conn, mock_cur, mock_notify_api, mock_worker_heartbeat
     ):
         row = {
             "id": "task-1",
@@ -467,7 +469,7 @@ class TestAgentTaskProcessing:
 
     @patch("app.worker_helpers.get_agent")
     def test_process_agent_task_without_usage(
-        self, mock_get_agent, mock_conn, mock_cur, mock_worker_deps
+        self, mock_get_agent, mock_conn, mock_cur, mock_notify_api, mock_worker_heartbeat
     ):
         row = {
             "id": "task-1",
@@ -496,7 +498,13 @@ class TestWorkflowTaskProcessing:
     @patch("app.worker_helpers.extract_workflow_type")
     @patch("app.worker_helpers.get_orchestrator")
     def test_process_workflow_task_success(
-        self, mock_get_orch, mock_extract, mock_conn, mock_cur, mock_worker_deps
+        self,
+        mock_get_orch,
+        mock_extract,
+        mock_conn,
+        mock_cur,
+        mock_notify_api,
+        mock_worker_heartbeat,
     ):
         row = {"id": "task-1", "type": "declarative:test", "input": {"topic": "AI"}}
 
@@ -512,7 +520,7 @@ class TestWorkflowTaskProcessing:
 
     @patch("app.worker_helpers.get_orchestrator")
     def test_process_workflow_task_failure(
-        self, mock_get_orch, mock_conn, mock_cur, mock_worker_deps
+        self, mock_get_orch, mock_conn, mock_cur, mock_notify_api, mock_worker_heartbeat
     ):
         row = {"id": "task-1", "type": "declarative:test", "input": {"topic": "AI"}}
 

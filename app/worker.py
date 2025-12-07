@@ -3,16 +3,16 @@ import os
 import socket
 import time
 from pathlib import Path
-from typing import Any
 
 import psycopg2
-import requests
+import requests  # noqa: F401 - Used in tests for mocking
 import urllib3
 from opentelemetry import trace
 from opentelemetry import trace as otel_trace
 from opentelemetry.trace import Status, StatusCode
 from psycopg2.extras import Json, RealDictCursor
 
+from app.api_client import notify_api_async
 from app.audit import log_audit_event
 from app.config import settings
 from app.db_sync import get_connection
@@ -36,9 +36,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 configure_logging(log_level="INFO", json_logs=True)
 logger = get_logger(__name__)
 
-# API endpoint (internal Docker network)
-API_URL = "https://task-api:8443"
-
+# API endpoint (internal Docker network) - Moved to api_client.py
 # Worker Identity (hostname:pid)
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 
@@ -63,40 +61,14 @@ setup_tracing(
 tracer = trace.get_tracer(__name__)
 
 
-def notify_api_async(
-    task_id: str, status: str, output: dict | None = None, error: str | None = None
-) -> None:
+def run_worker_legacy():  # noqa: PLR0915
     """
-    Notify API of task update (best-effort, non-blocking).
-    This triggers metrics recording and WebSocket broadcasting.
-    Failures are logged but don't affect task completion.
-
-    Args:
-        task_id: UUID of the task
-        status: Task status
-        output: Task output dict (optional)
-        error: Error message (optional)
+    DEPRECATED: Use run_worker() instead.
+    Main worker loop to process tasks with lease-based acquisition.
     """
-    url = f"{API_URL}/tasks/{task_id}"
-    payload: dict[str, Any] = {"status": status}
-
-    if output is not None:
-        payload["output"] = output
-    if error is not None:
-        payload["error"] = error
-
-    try:
-        # Use verify=False for internal communication with self-signed certs
-        response = requests.patch(url, json=payload, timeout=5, verify=False)  # nosec B501
-        response.raise_for_status()
-        logger.debug("api_notified", task_id=task_id, status=status)
-    except Exception as e:
-        # Log but don't fail - DB already updated
-        logger.warning("api_notification_failed", task_id=task_id, error=str(e)[:100])
-
-
-def run_worker():  # noqa: PLR0915
-    """Main worker loop to process tasks with lease-based acquisition."""
+    logger.warning(
+        "Using deprecated run_worker_legacy(). This will be removed in a future release."
+    )
     logger.info(
         "worker_started",
         worker_id=WORKER_ID,
@@ -148,7 +120,7 @@ def run_worker():  # noqa: PLR0915
                 poll_interval = settings.worker_poll_min_interval_seconds
 
                 # Process the task
-                _process_task_row(conn, cur, row)
+                _process_task_row_legacy(conn, cur, row)
 
                 # Decrement active leases after processing
                 active_leases.labels(worker_id=WORKER_ID).dec()
@@ -200,8 +172,11 @@ def run_worker():  # noqa: PLR0915
             time.sleep(0.01)
 
 
-def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912
-    """Process a single task or subtask row from the database."""
+def _process_task_row_legacy(conn, cur, row):  # noqa: PLR0915, PLR0912
+    """
+    DEPRECATED: Use WorkerStateMachine instead.
+    Process a single task or subtask row from the database.
+    """
     source_type = row.get("source_type", "task")
 
     # Route to appropriate handler based on source type
@@ -428,6 +403,15 @@ def _process_task_row(conn, cur, row):  # noqa: PLR0915, PLR0912
             logger.debug("trace_flushed", task_id=task_id)
     except Exception as e:
         logger.warning("trace_flush_failed", error=str(e))
+
+
+def run_worker() -> None:
+    """Main entry point for worker process."""
+    from app.worker_state import WorkerStateMachine
+
+    worker_id = get_instance_name()
+    state_machine = WorkerStateMachine(worker_id=worker_id)
+    state_machine.run()
 
 
 if __name__ == "__main__":
