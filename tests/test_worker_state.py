@@ -353,13 +353,13 @@ def test_run_processes_task():
     mock_result.error = None
 
     with (
-        patch("app.db_sync.get_connection") as mock_get_conn,
-        patch("app.worker_lease.recover_expired_leases") as mock_recover,
-        patch("app.worker_helpers.claim_next_task") as mock_claim_task,
-        patch("app.task_state.TaskStateMachine") as mock_task_sm_class,
-        patch("app.instance.get_instance_name") as mock_get_instance,
-        patch("app.metrics.worker_heartbeat"),
-        patch("app.metrics.active_leases"),
+        patch("app.worker_state.get_connection") as mock_get_conn,
+        patch("app.worker_state.recover_expired_leases") as mock_recover,
+        patch("app.worker_state.claim_next_task") as mock_claim_task,
+        patch("app.worker_state.TaskStateMachine") as mock_task_sm_class,
+        patch("app.worker_state.get_instance_name") as mock_get_instance,
+        patch("app.worker_state.worker_heartbeat"),
+        patch("app.worker_state.active_leases"),
         patch("signal.signal"),
     ):
         mock_get_conn.return_value = mock_conn
@@ -410,11 +410,11 @@ def test_run_handles_no_tasks():
     mock_conn.cursor.return_value = mock_cursor
 
     with (
-        patch("app.db_sync.get_connection") as mock_get_conn,
-        patch("app.worker_lease.recover_expired_leases") as mock_recover,
-        patch("app.worker_helpers.claim_next_task") as mock_claim_task,
-        patch("app.instance.get_instance_name") as mock_get_instance,
-        patch("app.metrics.worker_heartbeat"),
+        patch("app.worker_state.get_connection") as mock_get_conn,
+        patch("app.worker_state.recover_expired_leases") as mock_recover,
+        patch("app.worker_state.claim_next_task") as mock_claim_task,
+        patch("app.worker_state.get_instance_name") as mock_get_instance,
+        patch("app.worker_state.worker_heartbeat"),
         patch("signal.signal"),
     ):
         mock_get_conn.return_value = mock_conn
@@ -476,13 +476,13 @@ def test_run_shutdown_graceful():
     mock_result.error = None
 
     with (
-        patch("app.db_sync.get_connection") as mock_get_conn,
-        patch("app.worker_lease.recover_expired_leases") as mock_recover,
-        patch("app.worker_helpers.claim_next_task") as mock_claim_task,
-        patch("app.task_state.TaskStateMachine") as mock_task_sm_class,
-        patch("app.instance.get_instance_name") as mock_get_instance,
-        patch("app.metrics.worker_heartbeat"),
-        patch("app.metrics.active_leases"),
+        patch("app.worker_state.get_connection") as mock_get_conn,
+        patch("app.worker_state.recover_expired_leases") as mock_recover,
+        patch("app.worker_state.claim_next_task") as mock_claim_task,
+        patch("app.worker_state.TaskStateMachine") as mock_task_sm_class,
+        patch("app.worker_state.get_instance_name") as mock_get_instance,
+        patch("app.worker_state.worker_heartbeat"),
+        patch("app.worker_state.active_leases"),
         patch("signal.signal"),
     ):
         mock_get_conn.return_value = mock_conn
@@ -541,11 +541,11 @@ def test_run_connection_failure():
         return mock_conn
 
     with (
-        patch("app.db_sync.get_connection") as mock_get_conn,
-        patch("app.worker_lease.recover_expired_leases") as mock_recover,
+        patch("app.worker_state.get_connection") as mock_get_conn,
+        patch("app.worker_state.recover_expired_leases") as mock_recover,
         patch("time.sleep"),  # Mock sleep to speed up test
-        patch("app.instance.get_instance_name") as mock_get_instance,
-        patch("app.metrics.worker_heartbeat"),
+        patch("app.worker_state.get_instance_name") as mock_get_instance,
+        patch("app.worker_state.worker_heartbeat"),
         patch("signal.signal"),
     ):
         mock_get_conn.side_effect = mock_connect
@@ -573,3 +573,45 @@ def test_run_connection_failure():
         assert call_count["value"] >= 2
         mock_conn.close.assert_called()
         assert worker.context.connection is None
+
+
+# ============================================================================
+# Structural Tests for Handler Dispatch Pattern (3 tests)
+# ============================================================================
+
+
+def test_all_states_have_handlers():
+    """Every state must have a handler."""
+    sm = WorkerStateMachine(worker_id="test-structural-1")
+    for state in WorkerState:
+        assert state in sm.handlers, f"Missing handler for {state}"
+        assert callable(sm.handlers[state])
+
+
+def test_handler_naming_convention():
+    """Handlers must follow _handle_{state} naming."""
+    sm = WorkerStateMachine(worker_id="test-structural-2")
+    for state, handler in sm.handlers.items():
+        expected = f"_handle_{state.name.lower()}"
+        assert (
+            handler.__name__ == expected
+        ), f"Handler for {state} named {handler.__name__}, expected {expected}"
+
+
+def test_run_dispatch_complexity():
+    """run() must use dispatch, not elif chains."""
+    import ast
+    import inspect
+    import textwrap
+
+    source = inspect.getsource(WorkerStateMachine.run)
+    # Dedent to avoid IndentationError in ast.parse
+    source = textwrap.dedent(source)
+    tree = ast.parse(source)
+
+    if_count = sum(1 for n in ast.walk(tree) if isinstance(n, ast.If))
+    assert if_count <= 3, (
+        f"run() has {if_count} conditionals. "
+        "Expected <= 3 (shutdown check + error handling). "
+        "Use handler dispatch pattern."
+    )

@@ -10,7 +10,7 @@ import requests
 # Add integrations to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "integrations" / "openwebui"))
 
-from openwebui_agent_tool import Tools
+from integrations.openwebui.openwebui_agent import Tools
 
 
 @pytest.fixture
@@ -52,8 +52,8 @@ class TestAgentToolIntegration:
     async def test_end_to_end_agent_execution(self, agent_tool):
         """Test complete agent execution flow."""
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             # Mock task creation
             mock_post.return_value.status_code = 201
@@ -104,8 +104,8 @@ class TestAgentToolIntegration:
     async def test_agent_not_found_shows_available(self, agent_tool, mock_agents_response):
         """Test that invalid agent shows available agents."""
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             # Mock task creation failure
             error_response = MagicMock()
@@ -139,8 +139,8 @@ class TestAgentToolIntegration:
     async def test_task_error_handling(self, agent_tool):
         """Test handling of task errors."""
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             # Mock task creation
             mock_post.return_value.status_code = 201
@@ -165,7 +165,7 @@ class TestAgentToolIntegration:
     @pytest.mark.asyncio
     async def test_network_error_handling(self, agent_tool):
         """Test handling of network errors."""
-        with patch("openwebui_agent_tool.requests.post") as mock_post:
+        with patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post:
             mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
 
             result = await agent_tool.agent("research 'test'")
@@ -177,8 +177,8 @@ class TestAgentToolIntegration:
     async def test_user_context_propagation(self, agent_tool):
         """Test that user context is properly propagated."""
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             mock_post.return_value.json.return_value = {"id": "task-789", "status": "pending"}
             mock_get.return_value.json.return_value = {
@@ -200,8 +200,8 @@ class TestAgentToolIntegration:
     async def test_output_format_variations(self, agent_tool):
         """Test handling different output formats."""
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             mock_post.return_value.json.return_value = {"id": "task-1", "status": "pending"}
 

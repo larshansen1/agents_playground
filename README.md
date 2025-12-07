@@ -373,12 +373,12 @@ See [docs/OPENWEBUI.md](docs/OPENWEBUI.md) for complete integration guide.
 
 ### Available Tools
 
-The system provides a suite of tools for Open WebUI:
+The system provides three primary commands for OpenWebUI:
 
-- **@discover**: Explore available agents, tools, and workflows
-- **@queue**: Smart task submission with dynamic workflow selection
+- **@flow**: Execute workflows (smart selection or direct by name)
 - **@agent**: Direct agent execution
-- **@workflow**: Direct workflow execution
+- **@tool**: Direct tool execution
+- **@discover**: Explore available agents, tools, and workflows
 
 See [docs/OPENWEBUI_TOOLS.md](docs/OPENWEBUI_TOOLS.md) for a complete user guide and examples.
 

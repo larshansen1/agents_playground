@@ -1,8 +1,8 @@
 """
-title: Workflow Execution Tool
+title: Tool
 author: system
 version: 1.0
-description: Execute a specific workflow directly by name
+description: Execute a specific tool directly
 requirements: requests, asyncio
 """
 
@@ -43,17 +43,12 @@ class Tools:
             description="Interval in seconds to poll for task completion",
         )
         timeout: int = Field(
-            default=300,
-            description="Maximum time in seconds to wait for task completion",
-        )
-        cache_ttl_seconds: int = Field(
             default=60,
-            description="Cache workflow data for N seconds",
+            description="Maximum time in seconds to wait for task completion",
         )
 
     def __init__(self):
         self.valves = self.Valves()
-        self._cache: dict[str, tuple[float, Any]] = {}  # key -> (timestamp, data)
 
     def _get_ssl_config(self) -> dict[str, Any]:
         """Get SSL configuration for mTLS requests."""
@@ -70,58 +65,36 @@ class Tools:
 
         return config_dict
 
-    def _get_cached_or_fetch(
-        self,
-        cache_key: str,
-        fetch_func: Any,
-    ) -> Any:
-        """Get from cache or fetch from API."""
-        now = time.time()
-
-        # Check cache
-        if cache_key in self._cache:
-            timestamp, data = self._cache[cache_key]
-            if now - timestamp < self.valves.cache_ttl_seconds:
-                return data
-
-        # Fetch new data
-        data = fetch_func()
-        self._cache[cache_key] = (now, data)
-        return data
-
-    async def _fetch_workflows(self) -> list[dict]:
-        """Fetch workflows from registry API."""
-
-        def _fetch():
-            response = requests.get(
-                f"{self.valves.task_api_url}/admin/workflows",
+    async def _fetch_tools(self) -> list[dict]:
+        """Fetch available tools from registry API."""
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                f"{self.valves.task_api_url}/admin/tools",
                 timeout=10,
                 **self._get_ssl_config(),
             )
             response.raise_for_status()
-            workflows: list[dict] = response.json().get("workflows", [])
-            return workflows
-
-        try:
-            return await asyncio.to_thread(self._get_cached_or_fetch, "workflows", _fetch)
+            tools: list[dict] = response.json().get("tools", [])
+            return tools
         except requests.exceptions.RequestException as e:
-            msg = f"Failed to fetch workflows: {e!s}"
+            msg = f"Failed to fetch tools: {e!s}"
             raise RuntimeError(msg) from e
 
-    async def _create_workflow_task(
-        self, workflow_name: str, task_input: str, user_id: str | None = None
+    async def _create_tool_task(
+        self, tool_name: str, tool_input: dict, user_id: str | None = None
     ) -> dict[str, Any]:
-        """Create a task for direct workflow execution."""
+        """Create a task for direct tool execution."""
         payload = {
-            "type": f"workflow:{workflow_name}",
-            "input": {"topic": task_input},
+            "tool_name": tool_name,
+            "input": tool_input,
             "user_id": user_id,
         }
 
         try:
             response = await asyncio.to_thread(
                 requests.post,
-                f"{self.valves.task_api_url}/tasks",
+                f"{self.valves.task_api_url}/tasks/tool",
                 json=payload,
                 timeout=10,
                 **self._get_ssl_config(),
@@ -139,7 +112,7 @@ class Tools:
                         error_msg = error_detail
                 except ValueError:
                     pass
-            msg = f"Failed to create workflow task: {error_msg}"
+            msg = f"Failed to create task: {error_msg}"
             raise RuntimeError(msg) from e
 
     async def _wait_for_task(self, task_id: str, __event_emitter__: Any = None) -> dict[str, Any]:
@@ -162,13 +135,13 @@ class Tools:
                     return task
                 if status == "error":
                     error_msg = task.get("error", "Unknown error")
-                    msg = f"Workflow failed: {error_msg}"
+                    msg = f"Task failed: {error_msg}"
                     raise RuntimeError(msg)
 
                 # Emit status update if running
                 if __event_emitter__:
                     await self._emit_status(
-                        __event_emitter__, f"Workflow running... (Status: {status})", False
+                        __event_emitter__, f"Tool executing... (Status: {status})", False
                     )
 
                 await asyncio.sleep(self.valves.poll_interval)
@@ -178,7 +151,7 @@ class Tools:
                 print(f"Polling error: {e}")
                 await asyncio.sleep(self.valves.poll_interval)
 
-        msg = "Workflow timed out waiting for completion"
+        msg = "Task timed out waiting for completion"
         raise TimeoutError(msg)
 
     async def _emit_status(self, emitter: Any, message: str, done: bool = False):
@@ -186,56 +159,54 @@ class Tools:
         if emitter:
             await emitter({"type": "status", "data": {"description": message, "done": done}})
 
-    def _format_workflow_list(self, workflows: list[dict]) -> str:
-        """Format list of workflows for display."""
-        if not workflows:
-            return "⚠️ **No workflows available**"
+    def _format_tool_list(self, tools: list[dict]) -> str:
+        """Format list of tools for display."""
+        if not tools:
+            return "⚠️ **No tools available**"
 
-        lines = ["# Available Workflows\n"]
-        for workflow in workflows:
-            name = workflow.get("name", "unknown")
-            description = workflow.get("description", "No description")
-            strategy = workflow.get("strategy", "unknown")
-            max_iterations = workflow.get("max_iterations")
-            steps = workflow.get("steps", [])
+        lines = ["# Available Tools\n"]
+        for tool in tools:
+            name = tool.get("name", "unknown")
+            description = tool.get("description", "No description")
+            schema = tool.get("schema", {})
 
             lines.append(f"**{name}**")
             lines.append(f"- Description: {description}")
-            lines.append(
-                f"- Strategy: {strategy}",
-            )
-            if max_iterations:
-                lines.append(f"- Max Iterations: {max_iterations}")
 
-            # Show step sequence
-            if steps:
-                step_names = [step.get("name", step.get("agent_type", "unknown")) for step in steps]
-                lines.append(f"- Steps: {' → '.join(step_names)}")
+            # Show parameters
+            if schema.get("properties"):
+                required_params = schema.get("required", [])
+                params = []
+                for param_name in required_params:
+                    params.append(param_name)
+                if params:
+                    lines.append(f"- Parameters: {', '.join(params)}")
 
-            lines.append(f'- Usage: `@workflow {name} "your topic"`\n')
-
-        lines.append("\n---\n")
-        lines.append("**Note:** You can also use `@flow` for smart workflow selection.")
+            lines.append(f"- Usage: `@tool {name} <args>`\n")
 
         return "\n".join(lines)
 
-    async def workflow(  # noqa: PLR0911
+    async def tool(  # noqa: PLR0911, PLR0912, PLR0915
         self,
         command: str = "",
         __user__: dict | None = None,
         __event_emitter__: Any = None,
     ) -> str:
         """
-        Execute a specific workflow directly by name.
+        Execute a specific tool directly.
 
         Args:
-            command: The command string containing workflow name and topic.
-                     Format: "<workflow_name> <topic>"
+            command: The command string containing tool name and arguments.
+                     Format: "<tool_name> <args...>"
             __user__: User context from Open WebUI
             __event_emitter__: Event emitter for UI status updates
 
         Returns:
-            Workflow response or error message.
+            Tool response or error message.
+
+        Examples:
+            @tool calculator "2 + 2"
+            @tool web_search "Python tutorials"
         """
         # Extract user ID
         user_id = __user__.get("id") if __user__ else None
@@ -243,47 +214,80 @@ class Tools:
         # Parse command
         parts = command.strip().split(maxsplit=1)
 
-        # Case 1: No arguments - list workflows
+        # Case 1: No arguments - list tools
         if not parts or not parts[0]:
             try:
-                await self._emit_status(__event_emitter__, "Fetching workflows...", False)
-                workflows = await self._fetch_workflows()
+                await self._emit_status(__event_emitter__, "Fetching tools...", False)
+                tools = await self._fetch_tools()
                 await self._emit_status(__event_emitter__, "List retrieved", True)
-                return self._format_workflow_list(workflows)
+                return self._format_tool_list(tools)
             except Exception as e:
-                return f"❌ **Error fetching workflows**: {e!s}"
+                return f"❌ **Error fetching tools**: {e!s}"
 
-        workflow_name = parts[0]
+        tool_name = parts[0]
 
-        # Case 2: Workflow name provided but no topic
+        # Case 2: Tool name provided but no args
         if len(parts) < 2:
-            return f"""⚠️ **Missing Topic**
+            return f"""⚠️ **Missing Arguments**
 
-Usage: `@workflow {workflow_name} "your topic"`
+Usage: `@tool {tool_name} <args...>`
 
-Example: `@workflow {workflow_name} "quantum computing applications"`
+Example: `@tool {tool_name} "your input"`
 """
 
-        topic = parts[1]
+        tool_args = parts[1]
+
+        # Strip surrounding quotes if present (from command like: @tool calculator "2+2")
+        if (tool_args.startswith('"') and tool_args.endswith('"')) or (
+            tool_args.startswith("'") and tool_args.endswith("'")
+        ):
+            tool_args = tool_args[1:-1]
 
         try:
-            # 1. Create Workflow Task
-            await self._emit_status(
-                __event_emitter__, f"Starting workflow '{workflow_name}'...", False
-            )
+            # Fetch tool info to get schema
+            await self._emit_status(__event_emitter__, f"Preparing {tool_name}...", False)
+            tools = await self._fetch_tools()
+            tool_info = next((t for t in tools if t.get("name") == tool_name), None)
+
+            # Parse tool arguments based on schema
+            if tool_info and tool_info.get("schema"):
+                schema = tool_info["schema"]
+                required = schema.get("required", [])
+
+                # Simple mapping: if tool has one required parameter, use that
+                if len(required) == 1:
+                    param_name = required[0]
+                    tool_input = {param_name: tool_args}
+                else:
+                    # Multiple parameters - try to parse as JSON, fallback to first required param
+                    try:
+                        tool_input = json.loads(tool_args)
+                    except (json.JSONDecodeError, ValueError):
+                        # Not JSON, use first required parameter if available
+                        if required:
+                            tool_input = {required[0]: tool_args}
+                        else:
+                            # No required params, try generic 'description'
+                            tool_input = {"description": tool_args}
+            else:
+                # No schema info, fallback to generic description
+                tool_input = {"description": tool_args}
+
+            # 1. Create Task
+            await self._emit_status(__event_emitter__, f"Executing {tool_name}...", False)
 
             try:
-                task_response = await self._create_workflow_task(workflow_name, topic, user_id)
+                task_response = await self._create_tool_task(tool_name, tool_input, user_id)
             except RuntimeError as e:
-                # Check if it's an invalid workflow error
-                if "Workflow" in str(e) and "not found" in str(e):
-                    # Fetch available workflows to show helpful error
+                # Check if it's an invalid tool error
+                if "Tool" in str(e) and "not found" in str(e):
+                    # Fetch available tools to show helpful error
                     try:
-                        workflows = await self._fetch_workflows()
-                        workflow_list = self._format_workflow_list(workflows)
-                        return f"""❌ **Workflow '{workflow_name}' not found**
+                        tools = await self._fetch_tools()
+                        tool_list = self._format_tool_list(tools)
+                        return f"""❌ **Tool '{tool_name}' not found**
 
-{workflow_list}
+{tool_list}
 """
                     except Exception:  # nosec B110
                         pass  # Fallback to generic error
@@ -292,13 +296,11 @@ Example: `@workflow {workflow_name} "quantum computing applications"`
             task_id = task_response["id"]
 
             # 2. Wait for completion
-            await self._emit_status(
-                __event_emitter__, f"Workflow '{workflow_name}' running...", False
-            )
+            await self._emit_status(__event_emitter__, f"Tool {tool_name} running...", False)
             final_task = await self._wait_for_task(task_id, __event_emitter__)
 
             # 3. Return result
-            await self._emit_status(__event_emitter__, "Workflow complete!", True)
+            await self._emit_status(__event_emitter__, "Task complete!", True)
 
             output = final_task.get("output", {})
             # If output is a dict with 'result' or 'response', use that.
@@ -316,5 +318,5 @@ Example: `@workflow {workflow_name} "quantum computing applications"`
             return f"```json\n{json.dumps(output, indent=2)}\n```"
 
         except Exception as e:
-            await self._emit_status(__event_emitter__, "Workflow failed", True)
+            await self._emit_status(__event_emitter__, "Task failed", True)
             return f"❌ **Error**: {e!s}"

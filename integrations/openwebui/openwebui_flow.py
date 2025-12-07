@@ -1,5 +1,5 @@
 """
-title: Task Flow with mTLS (Async Push)
+title: Flow
 author: lars
 version: 8.0
 file_handler: true
@@ -47,9 +47,9 @@ except ImportError:
         def start_span(self, name, attributes=None, parent=None):  # noqa: ARG002
             return DummySpan()
 
-    tracer = DummyTracer()
-    Status = object
-    StatusCode = object
+    tracer = DummyTracer()  # type: ignore[assignment]
+    Status = object  # type: ignore[misc,assignment]
+    StatusCode = object  # type: ignore[misc,assignment]
 
 
 # Trace context utilities for distributed tracing

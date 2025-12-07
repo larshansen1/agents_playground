@@ -3,11 +3,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.api_client import notify_api_async
 from app.worker import (
     _process_task_row_legacy as _process_task_row,
-)
-from app.worker import (
-    notify_api_async,
 )
 from app.worker import (
     run_worker_legacy as run_worker,
@@ -16,7 +14,7 @@ from app.worker import (
 
 @pytest.fixture
 def mock_requests():
-    with patch("app.worker.requests") as mock:
+    with patch("app.api_client.requests") as mock:
         mock.patch.return_value.status_code = 200
         yield mock
 

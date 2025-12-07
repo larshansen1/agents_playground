@@ -469,9 +469,9 @@ def test_execute_successful_task():
     }
 
     with (
-        patch("app.tasks.execute_task") as mock_execute,
-        patch("app.worker.notify_api_async") as mock_notify,
-        patch("app.audit.log_audit_event") as mock_audit,
+        patch("app.task_state.execute_task") as mock_execute,
+        patch("app.task_state.notify_api_async") as mock_notify,
+        patch("app.task_state.log_audit_event") as mock_audit,
     ):
         mock_execute.return_value = {"output": mock_output, "usage": mock_usage}
 
@@ -525,9 +525,9 @@ def test_execute_failing_task():
 
     # Mock execute_task to raise an exception
     with (
-        patch("app.tasks.execute_task") as mock_execute,
-        patch("app.worker.notify_api_async") as mock_notify,
-        patch("app.audit.log_audit_event") as mock_audit,
+        patch("app.task_state.execute_task") as mock_execute,
+        patch("app.task_state.notify_api_async") as mock_notify,
+        patch("app.task_state.log_audit_event") as mock_audit,
     ):
         mock_execute.side_effect = ValueError("Audio file is corrupted")
 
@@ -590,9 +590,9 @@ def test_execute_with_lease_renewal():
     }
 
     with (
-        patch("app.tasks.execute_task") as mock_execute,
-        patch("app.worker.notify_api_async"),
-        patch("app.audit.log_audit_event"),
+        patch("app.task_state.execute_task") as mock_execute,
+        patch("app.task_state.notify_api_async"),
+        patch("app.task_state.log_audit_event"),
     ):
         mock_execute.return_value = {"output": mock_output, "usage": mock_usage}
 

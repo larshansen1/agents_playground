@@ -141,6 +141,8 @@ module = [
     "psycopg2.*",
     "tiktoken.*",
     "pymupdf.*",
+    "fitz.*",
+    "jsonschema.*",
 ]
 ignore_missing_imports = true
 

@@ -8,9 +8,11 @@ from opentelemetry.trace import Status, StatusCode
 from psycopg2.extras import Json
 
 from app.agents import get_agent
+from app.api_client import notify_api_async
 from app.db_utils import aggregate_subtask_costs, get_workflow_state
 from app.instance import get_instance_name
 from app.logging_config import get_logger
+from app.metrics import worker_heartbeat
 from app.orchestrator import extract_workflow_type, get_orchestrator
 from app.trace_utils import extract_trace_context
 
@@ -18,16 +20,6 @@ from app.trace_utils import extract_trace_context
 
 logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
-
-
-def _get_worker_deps():
-    """Get worker dependencies to avoid circular import."""
-    from app.worker import (
-        notify_api_async,
-        worker_heartbeat,
-    )
-
-    return notify_api_async, worker_heartbeat
 
 
 def _handle_workflow_completion(action, parent_task_id, output, conn, cur, notify_api_async):
@@ -51,8 +43,6 @@ def _handle_workflow_completion(action, parent_task_id, output, conn, cur, notif
 
 def _process_subtask(conn, cur, row):  # noqa: PLR0915
     """Process a subtask by executing the appropriate agent."""
-    notify_api_async, worker_heartbeat = _get_worker_deps()
-
     subtask_id = str(row["id"])
     parent_task_id = str(row["parent_task_id"])
     agent_type = row["agent_type"]
@@ -168,8 +158,6 @@ def _process_subtask(conn, cur, row):  # noqa: PLR0915
 
 def _process_agent_task(conn, cur, row):
     """Process an agent task by directly executing the specified agent."""
-    notify_api_async, worker_heartbeat = _get_worker_deps()
-
     task_id = str(row["id"])
     task_type = row["type"]
     task_input = row["input"]
@@ -264,8 +252,6 @@ def _process_agent_task(conn, cur, row):
 
 def _process_workflow_task(conn, cur, row):
     """Process a workflow task by delegating to orchestrator."""
-    notify_api_async, worker_heartbeat = _get_worker_deps()
-
     task_id = str(row["id"])
     task_type = row["type"]
     task_input = row["input"]

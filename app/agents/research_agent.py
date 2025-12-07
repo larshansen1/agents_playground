@@ -69,7 +69,7 @@ class ResearchAgent(Agent):
         # Call LLM
         resp = client.chat.completions.create(
             model=MODEL_NAME,
-            messages=messages,
+            messages=messages,  # type: ignore[arg-type]
             temperature=0.3,  # Slightly higher for creative research
             extra_headers=extra_headers if extra_headers else None,
         )
@@ -79,7 +79,8 @@ class ResearchAgent(Agent):
 
         # Parse response
         try:
-            output = extract_json(content_str)
+            content_to_parse = content_str if content_str else "{}"
+            output = extract_json(content_to_parse)
         except (json.JSONDecodeError, ImportError):
             # Fallback if model doesn't return JSON
             output = {

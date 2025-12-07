@@ -4,13 +4,24 @@ This module provides a formal state machine for managing worker lifecycle,
 replacing implicit state management with explicit states, events, and transitions.
 """
 
+import contextlib
+import signal
+import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from prometheus_client import Counter, Gauge
+from psycopg2.extras import RealDictCursor
 
+from app.config import settings
+from app.db_sync import get_connection
+from app.instance import get_instance_name
 from app.logging_config import get_logger
+from app.metrics import active_leases, worker_heartbeat
+from app.task_state import TaskStateMachine
+from app.worker_helpers import claim_next_task
+from app.worker_lease import recover_expired_leases
 
 logger = get_logger(__name__)
 
@@ -150,6 +161,17 @@ class WorkerStateMachine:
         # Set initial state metric
         worker_state_gauge.labels(worker_id=self.worker_id, state=self.state.value).set(1)
 
+        # Handler dispatch dictionary
+        self.handlers = {
+            WorkerState.STARTING: self._handle_starting,
+            WorkerState.CONNECTING: self._handle_connecting,
+            WorkerState.RECOVERING: self._handle_recovering,
+            WorkerState.RUNNING: self._handle_running,
+            WorkerState.BACKING_OFF: self._handle_backing_off,
+            WorkerState.SHUTTING_DOWN: self._handle_shutting_down,
+            WorkerState.STOPPED: self._handle_stopped,
+        }
+
     def transition(self, event: WorkerEvent) -> WorkerState:
         """Execute state transition with metrics and logging.
 
@@ -229,10 +251,108 @@ class WorkerStateMachine:
         """
         return self.state != WorkerState.STOPPED
 
-    def run(self) -> None:  # noqa: PLR0912, PLR0915
+    # ========================================================================
+    # State Handler Methods
+    # ========================================================================
+
+    def _handle_starting(self) -> None:
+        """Handler for STARTING state.
+
+        Initializes worker logging, metrics, and tracing.
+        Transitions to CONNECTING after initialization.
+        """
+        self._initialize()
+
+    def _handle_connecting(self) -> None:
+        """Handler for CONNECTING state.
+
+        Attempts to establish database connection.
+        Transitions to RECOVERING on success, retries on failure.
+        """
+        conn = self._connect()
+        if conn:
+            self.context.connection = conn
+            self.transition(WorkerEvent.CONNECTED)
+        else:
+            # Connection failed, will retry
+            self.transition(WorkerEvent.CONNECTION_FAILED)
+            time.sleep(5)
+
+    def _handle_recovering(self) -> None:
+        """Handler for RECOVERING state.
+
+        Recovers expired leases from other workers.
+        Transitions to RUNNING after recovery complete.
+        """
+        self._recover(self.context.connection)
+        self.transition(WorkerEvent.RECOVERY_COMPLETE)
+
+    def _handle_running(self) -> None:
+        """Handler for RUNNING state.
+
+        Polls for and processes tasks.
+        Transitions based on task availability.
+        """
+        # Poll for and process tasks
+        task_found = self._poll_and_process(self.context.connection, settings)
+
+        if task_found:
+            self.context.tasks_processed += 1
+            self.transition(WorkerEvent.POLL_CYCLE_COMPLETE)
+            # Sleep briefly to avoid CPU hogging
+            time.sleep(0.01)
+        else:
+            # No tasks available
+            self.transition(WorkerEvent.NO_TASKS_AVAILABLE)
+
+    def _handle_backing_off(self) -> None:
+        """Handler for BACKING_OFF state.
+
+        Implements exponential backoff when no tasks available.
+        Transitions back to RECOVERING after backoff period.
+        """
+        # Calculate backoff duration
+        backoff = min(
+            settings.worker_poll_min_interval_seconds
+            * (settings.worker_poll_backoff_multiplier**self.context.backoff_count),
+            settings.worker_poll_max_interval_seconds,
+        )
+        self.context.backoff_count += 1
+
+        logger.debug(
+            "worker_backing_off",
+            worker_id=self.worker_id,
+            backoff_duration=backoff,
+            backoff_count=self.context.backoff_count,
+        )
+
+        time.sleep(backoff)
+        self.transition(WorkerEvent.BACKOFF_COMPLETE)
+
+    def _handle_shutting_down(self) -> None:
+        """Handler for SHUTTING_DOWN state.
+
+        Handles graceful shutdown of worker.
+        Transitions to STOPPED after shutdown complete.
+        """
+        self._handle_shutdown(self.context.connection)
+        self.transition(WorkerEvent.SHUTDOWN_COMPLETE)
+
+    def _handle_stopped(self) -> None:
+        """Handler for STOPPED state.
+
+        Terminal state - no action needed.
+        Loop will exit via is_running() check.
+        """
+
+    # ========================================================================
+    # Main Loop
+    # ========================================================================
+
+    def run(self) -> None:
         """Main worker loop that processes tasks until shutdown.
 
-        Manages complete worker lifecycle:
+        Manages complete worker lifecycle through handler dispatch:
         1. STARTING: Initialize logging/metrics
         2. CONNECTING: Establish DB connection
         3. RECOVERING: Recover expired leases
@@ -244,10 +364,6 @@ class WorkerStateMachine:
         Raises:
             Exception: If critical error occurs during initialization
         """
-        import signal
-        import time
-
-        from app.config import settings
 
         # Install signal handlers for graceful shutdown
         def shutdown_handler(signum, _frame):
@@ -261,70 +377,15 @@ class WorkerStateMachine:
         signal.signal(signal.SIGTERM, shutdown_handler)
         signal.signal(signal.SIGINT, shutdown_handler)
 
-        # Initialize worker
-        self._initialize()
-
-        # Main loop
+        # Main loop - pure dispatch
         while self.is_running():
             # Check for shutdown request
             if self.context.shutdown_requested and self.state != WorkerState.SHUTTING_DOWN:
                 self.transition(WorkerEvent.SHUTDOWN_REQUESTED)
 
+            # Dispatch to state handler
             try:
-                if self.state == WorkerState.CONNECTING:
-                    # Try to establish connection
-                    conn = self._connect()
-                    if conn:
-                        self.context.connection = conn
-                        self.transition(WorkerEvent.CONNECTED)
-                    else:
-                        # Connection failed, will retry
-                        self.transition(WorkerEvent.CONNECTION_FAILED)
-                        time.sleep(5)
-                        continue
-
-                elif self.state == WorkerState.RECOVERING:
-                    # Recover expired leases
-                    self._recover(self.context.connection)
-                    self.transition(WorkerEvent.RECOVERY_COMPLETE)
-
-                elif self.state == WorkerState.RUNNING:
-                    # Poll for and process tasks
-                    task_found = self._poll_and_process(self.context.connection, settings)
-
-                    if task_found:
-                        self.context.tasks_processed += 1
-                        self.transition(WorkerEvent.POLL_CYCLE_COMPLETE)
-                        # Sleep briefly to avoid CPU hogging
-                        time.sleep(0.01)
-                    else:
-                        # No tasks available
-                        self.transition(WorkerEvent.NO_TASKS_AVAILABLE)
-
-                elif self.state == WorkerState.BACKING_OFF:
-                    # Calculate backoff duration
-                    backoff = min(
-                        settings.worker_poll_min_interval_seconds
-                        * (settings.worker_poll_backoff_multiplier**self.context.backoff_count),
-                        settings.worker_poll_max_interval_seconds,
-                    )
-                    self.context.backoff_count += 1
-
-                    logger.debug(
-                        "worker_backing_off",
-                        worker_id=self.worker_id,
-                        backoff_duration=backoff,
-                        backoff_count=self.context.backoff_count,
-                    )
-
-                    time.sleep(backoff)
-                    self.transition(WorkerEvent.BACKOFF_COMPLETE)
-
-                elif self.state == WorkerState.SHUTTING_DOWN:
-                    # Handle graceful shutdown
-                    self._handle_shutdown(self.context.connection)
-                    self.transition(WorkerEvent.SHUTDOWN_COMPLETE)
-
+                self.handlers[self.state]()
             except Exception as e:
                 logger.error(
                     "worker_loop_error",
@@ -342,11 +403,15 @@ class WorkerStateMachine:
 
         logger.info("worker_stopped", worker_id=self.worker_id)
 
+    # ========================================================================
+    # Helper Methods
+    # ========================================================================
+
     def _initialize(self) -> None:
         """Initialize worker in STARTING state."""
-        from app.instance import get_instance_name
-        from app.logging_config import configure_logging, get_logger  # noqa: F401
-        from app.metrics import worker_heartbeat
+        # Note: Imports moved to top-level to avoid PLC0415
+        # configure_logging and get_logger are already imported
+        # worker_heartbeat is already imported
 
         logger.info(
             "worker_starting",
@@ -367,8 +432,6 @@ class WorkerStateMachine:
             Connection object if successful, None if failed
         """
         try:
-            from app.db_sync import get_connection
-
             conn = get_connection()
             logger.info("worker_db_connected", worker_id=self.worker_id)
             return conn  # type: ignore[no-any-return]
@@ -387,10 +450,6 @@ class WorkerStateMachine:
         Args:
             conn: Database connection
         """
-        from datetime import UTC, datetime
-
-        from app.worker_lease import recover_expired_leases
-
         recovered = recover_expired_leases(conn, self.worker_id)
         self.context.last_recovery_time = datetime.now(UTC)
 
@@ -411,20 +470,11 @@ class WorkerStateMachine:
         Returns:
             True if task was found and processed, False otherwise
         """
-        import contextlib
-
-        from psycopg2.extras import RealDictCursor
-
-        from app.metrics import active_leases, worker_heartbeat
-        from app.task_state import TaskStateMachine
-        from app.worker_helpers import claim_next_task
-
         # Reset backoff on successful poll
         self.context.backoff_count = 0
 
         # Update heartbeat
-        from app.instance import get_instance_name
-
+        # Update heartbeat
         worker_heartbeat.labels(
             service="worker", instance=get_instance_name()
         ).set_to_current_time()
@@ -442,12 +492,14 @@ class WorkerStateMachine:
             # Task found - create state machine and execute
             task_id = str(row["id"])
             task_type = row.get("type") or row.get("agent_type", "unknown")
+            source_type = row.get("source_type", "task")
 
             # Create TaskStateMachine
             task_sm = TaskStateMachine(
                 task_id=task_id,
                 task_type=task_type,
                 worker_id=self.worker_id,
+                source_type=source_type,
             )
 
             # Set as current task
@@ -467,7 +519,9 @@ class WorkerStateMachine:
                     # Already incremented in main loop
                     pass
 
-            # Decrement active leases
+            # Decrement active leases for all tasks
+            # Workflow tasks remain in PROCESSING but are handed off to async execution
+            # so the worker can continue processing other tasks
             active_leases.labels(worker_id=self.worker_id).dec()
 
             return True
@@ -485,9 +539,6 @@ class WorkerStateMachine:
         Args:
             conn: Database connection (may be None)
         """
-        import contextlib
-        import time
-
         # Wait for active task to complete (with timeout)
         timeout = 30
         start_time = time.time()

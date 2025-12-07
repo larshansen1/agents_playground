@@ -136,7 +136,7 @@ def _summarize_direct(text: str, system_prompt: str, user_id_hash: str | None) -
 
     resp = client.chat.completions.create(
         model=MODEL_NAME,
-        messages=messages,
+        messages=messages,  # type: ignore[arg-type]
         temperature=0,
         extra_headers=extra_headers if extra_headers else None,
     )
@@ -206,7 +206,7 @@ def _summarize_hierarchical(
 
         resp = client.chat.completions.create(
             model=MODEL_NAME,
-            messages=messages,
+            messages=messages,  # type: ignore[arg-type]
             temperature=0,
             extra_headers=extra_headers if extra_headers else None,
         )
@@ -247,7 +247,7 @@ Create a comprehensive final summary that synthesizes all sections."""
 
     resp = client.chat.completions.create(
         model=MODEL_NAME,
-        messages=messages,
+        messages=messages,  # type: ignore[arg-type]
         temperature=0,
         extra_headers=extra_headers if extra_headers else None,
     )
@@ -326,7 +326,7 @@ def execute_task(
     # Call OpenRouter via OpenAI-compatible client
     resp = client.chat.completions.create(
         model=MODEL_NAME,
-        messages=messages,
+        messages=messages,  # type: ignore[arg-type]
         temperature=0,
     )
 

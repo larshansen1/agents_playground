@@ -184,3 +184,12 @@ class AgentTaskRequest(BaseModel):
     input: dict[str, Any] = Field(..., description="Input data for the agent")
     user_id: str | None = Field(None, description="User ID initiating the task")
     tenant_id: str | None = Field(None, description="Tenant ID for multi-tenant isolation")
+
+
+class ToolTaskRequest(BaseModel):
+    """Request to execute a specific tool directly."""
+
+    tool_name: str = Field(..., description="Name of tool to execute")
+    input: dict[str, Any] = Field(..., description="Input data for the tool")
+    user_id: str | None = Field(None, description="User ID initiating the task")
+    tenant_id: str | None = Field(None, description="Tenant ID for multi-tenant isolation")

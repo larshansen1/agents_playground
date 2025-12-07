@@ -10,7 +10,7 @@ import requests
 # Add integrations to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "integrations" / "openwebui"))
 
-from openwebui_agent_tool import Tools
+from integrations.openwebui.openwebui_agent import Tools
 
 
 @pytest.fixture
@@ -51,7 +51,7 @@ class TestAgentTool:
     @pytest.mark.asyncio
     async def test_list_agents(self, agent_tool, mock_agents):
         """Test listing agents when no command is provided."""
-        with patch("openwebui_agent_tool.requests.get") as mock_get:
+        with patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.raise_for_status = MagicMock()
@@ -71,8 +71,8 @@ class TestAgentTool:
     async def test_execute_agent_success(self, agent_tool):
         """Test successful agent execution."""
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             # Mock task creation
             mock_post_resp = MagicMock()
@@ -119,8 +119,8 @@ class TestAgentTool:
     async def test_execute_agent_not_found(self, agent_tool, mock_agents):
         """Test error when agent is not found."""
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             # Mock task creation failure
             mock_post_resp = MagicMock()
@@ -152,8 +152,8 @@ class TestAgentTool:
     async def test_execute_agent_timeout(self, agent_tool):
         """Test timeout waiting for agent."""
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             # Mock task creation
             mock_post_resp = MagicMock()
@@ -177,8 +177,8 @@ class TestAgentTool:
         emitter = AsyncMock()
 
         with (
-            patch("openwebui_agent_tool.requests.post") as mock_post,
-            patch("openwebui_agent_tool.requests.get") as mock_get,
+            patch("integrations.openwebui.openwebui_agent.requests.post") as mock_post,
+            patch("integrations.openwebui.openwebui_agent.requests.get") as mock_get,
         ):
             mock_post.return_value.json.return_value = {"id": "task-123", "status": "pending"}
             mock_get.return_value.json.return_value = {

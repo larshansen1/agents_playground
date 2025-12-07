@@ -5,13 +5,33 @@ replacing implicit state management with explicit states, events, and transition
 """
 
 import contextlib
+import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
+from typing import Any
 
 from prometheus_client import Counter, Histogram
+from psycopg2.extras import Json, RealDictCursor
 
+from app.agents import get_agent
+from app.api_client import notify_api_async
+from app.audit import log_audit_event
+from app.config import settings
 from app.logging_config import get_logger
+from app.orchestrator import (
+    extract_agent_type,
+    extract_tool_type,
+    extract_workflow_type,
+    get_orchestrator,
+    is_agent_task,
+    is_tool_task,
+    is_workflow_task,
+)
+from app.tasks import execute_task
+from app.tools.registry_init import tool_registry
+from app.trace_utils import extract_trace_context
+from app.worker_helpers import _process_subtask
 
 logger = get_logger(__name__)
 
@@ -154,18 +174,22 @@ class TaskStateMachine:
     and logging for task lifecycle events.
     """
 
-    def __init__(self, task_id: str, task_type: str, worker_id: str) -> None:
+    def __init__(
+        self, task_id: str, task_type: str, worker_id: str, source_type: str = "task"
+    ) -> None:
         """Initialize task state machine.
 
         Args:
             task_id: Unique identifier for this task
             task_type: Type of task being processed
             worker_id: ID of worker processing this task
+            source_type: Type of source (task or subtask)
         """
         self.state: TaskState = TaskState.PENDING
         self.task_id = task_id
         self.task_type = task_type
         self.worker_id = worker_id
+        self.source_type = source_type
         self.context = TaskContext()
 
     def transition(self, event: TaskEvent) -> TaskState:
@@ -239,9 +263,6 @@ class TaskStateMachine:
         Returns:
             TaskResult with execution outcome
         """
-        import time
-        from datetime import UTC, datetime
-
         # Initialize timing
         start_time = time.time()
         self.context.processing_started_at = datetime.now(UTC)
@@ -261,6 +282,44 @@ class TaskStateMachine:
             # State: CLAIMING → PROCESSING
             # Execute task processing
             success = self._execute_processing(conn)
+
+            # Special handling for workflow tasks which are async
+            if success and is_workflow_task(self.task_type):
+                # Async workflow started, return result in current state (PROCESSING)
+                # Do not transition to REPORTING/COMPLETED
+                self.context.processing_completed_at = datetime.now(UTC)
+                duration_ms = int((time.time() - start_time) * 1000)
+
+                return TaskResult(
+                    task_id=self.task_id,
+                    final_state=self.state,
+                    output=self.context.output_data,
+                    error=None,
+                    cost=0,
+                    duration_ms=duration_ms,
+                )
+
+            # Special handling for subtasks (fully handled in _execute_processing)
+            if self.source_type == "subtask":
+                self.context.processing_completed_at = datetime.now(UTC)
+                duration_ms = int((time.time() - start_time) * 1000)
+
+                final_state = TaskState.COMPLETED if success else TaskState.FAILED
+                if success:
+                    self.transition(TaskEvent.PROCESSING_SUCCEEDED)
+                    self.transition(TaskEvent.REPORT_SUCCEEDED)
+                else:
+                    self.transition(TaskEvent.PROCESSING_FAILED)
+                    self.transition(TaskEvent.REPORT_FAILED)
+
+                return TaskResult(
+                    task_id=self.task_id,
+                    final_state=final_state,
+                    output=self.context.output_data,
+                    error=self.context.error,
+                    cost=self.context.cost,
+                    duration_ms=duration_ms,
+                )
 
             # State: PROCESSING → REPORTING
             # Report results to database
@@ -321,9 +380,6 @@ class TaskStateMachine:
         Returns:
             True if lease claimed successfully, False otherwise
         """
-        from datetime import UTC, datetime, timedelta
-
-        from app.config import settings
 
         try:
             # Transition to CLAIMING
@@ -351,8 +407,47 @@ class TaskStateMachine:
                 self.transition(TaskEvent.CLAIM_FAILED)
             return False
 
+    def _execute_subtask_processing(self, conn: Any, cur: Any) -> bool:
+        """Execute subtask processing logic."""
+        # Fetch subtask data
+        cur.execute(
+            "SELECT id, parent_task_id, agent_type, input, iteration FROM subtasks WHERE id = %s",
+            (self.task_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            msg = f"Subtask {self.task_id} not found"
+            raise ValueError(msg)
+
+        try:
+            _process_subtask(conn, cur, row)
+        except Exception as e:
+            self.context.error = str(e)
+            return False
+
+        # Check status from DB
+        cur.execute(
+            "SELECT status, error, output, total_cost FROM subtasks WHERE id = %s", (self.task_id,)
+        )
+        status_row = cur.fetchone()
+        if status_row:
+            if status_row["status"] == "error":
+                self.context.error = status_row.get("error")
+                return False
+            if status_row["status"] == "done":
+                self.context.output_data = status_row.get("output")
+                self.context.cost = status_row.get("total_cost", 0)
+                return True
+        return False
+
     def _execute_processing(self, conn: object) -> bool:
         """Execute task processing logic.
+
+        Routes to appropriate handler based on task type:
+        - workflow:* -> _process_workflow_task_execution
+        - agent:* -> _process_agent_task_execution
+        - subtask -> _execute_subtask_processing
+        - regular tasks -> execute_task
 
         Args:
             conn: Database connection
@@ -361,13 +456,10 @@ class TaskStateMachine:
             True if processing succeeded, False if it failed
         """
 
-        from psycopg2.extras import RealDictCursor
-
-        from app.audit import log_audit_event
-        from app.tasks import execute_task
-        from app.trace_utils import extract_trace_context
-
         cur = conn.cursor(cursor_factory=RealDictCursor)  # type: ignore[attr-defined]
+
+        if self.source_type == "subtask":
+            return self._execute_subtask_processing(conn, cur)
 
         try:
             # Fetch task data from database
@@ -392,8 +484,7 @@ class TaskStateMachine:
             conn.commit()  # type: ignore[attr-defined]
 
             # Notify API (best-effort)
-            from app.worker import notify_api_async
-
+            # Notify API (best-effort)
             notify_api_async(self.task_id, "running")
 
             # Extract user_id_hash for audit
@@ -409,14 +500,28 @@ class TaskStateMachine:
             )
             conn.commit()  # type: ignore[attr-defined]
 
-            # Execute the task
-            result = execute_task(self.task_type, cleaned_input, user_id_hash)
+            # Route to appropriate execution handler based on task type
+            if is_workflow_task(self.task_type):
+                # Workflow tasks are handled asynchronously via orchestrator
+                # They create subtasks and complete later via process_subtask_completion
+                result = self._process_workflow_task_execution(
+                    conn, cur, task_input, cleaned_input, user_id_hash
+                )
+            elif is_agent_task(self.task_type):
+                # Agent tasks execute directly
+                result = self._process_agent_task_execution(cleaned_input, user_id_hash)
+            elif is_tool_task(self.task_type):
+                # Tool tasks execute directly
+                result = self._process_tool_task_execution(cleaned_input, user_id_hash)
+            else:
+                # Regular tasks use execute_task
+                result = execute_task(self.task_type, cleaned_input, user_id_hash)
 
             # Handle result format
             if isinstance(result, dict) and "usage" in result:
                 self.context.output_data = result["output"]
                 usage = result["usage"]
-                self.context.cost = usage.get("total_cost", 0)
+                self.context.cost = usage.get("total_cost", 0) if usage else 0
             else:
                 self.context.output_data = result
                 usage = None
@@ -425,8 +530,9 @@ class TaskStateMachine:
             self.context._usage = usage  # type: ignore
             self.context._user_id_hash = user_id_hash  # type: ignore
 
-            # Transition to reporting
-            self.transition(TaskEvent.PROCESSING_SUCCEEDED)
+            # Transition to reporting (unless async workflow)
+            if not is_workflow_task(self.task_type):
+                self.transition(TaskEvent.PROCESSING_SUCCEEDED)
             return True
 
         except Exception as e:
@@ -448,6 +554,84 @@ class TaskStateMachine:
         finally:
             cur.close()
 
+    def _process_agent_task_execution(self, cleaned_input: dict, user_id_hash: str | None) -> dict:
+        """Execute an agent task directly.
+
+        Args:
+            cleaned_input: Task input with trace context removed
+            user_id_hash: User ID hash for tracking
+
+        Returns:
+            Result dict with output and usage
+        """
+
+        agent_type = extract_agent_type(self.task_type)
+        agent = get_agent(agent_type)
+        return agent.execute(cleaned_input, user_id_hash)
+
+    def _process_tool_task_execution(
+        self, cleaned_input: dict, user_id_hash: str | None = None  # noqa: ARG002
+    ) -> dict:
+        """Execute a tool task directly.
+
+        Args:
+            cleaned_input: Task input with trace context removed
+            user_id_hash: User ID hash for tracking
+
+        Returns:
+            Result dict with output and usage
+        """
+        tool_name = extract_tool_type(self.task_type)
+        tool = tool_registry.get(tool_name)
+
+        # Execute tool
+        result = tool.execute(**cleaned_input)
+
+        # Tools currently don't track usage/cost, return simple format
+        return {
+            "output": result,
+            "usage": None,
+        }
+
+    def _process_workflow_task_execution(
+        self,
+        conn: Any,
+        _cur: Any,
+        task_input: dict,
+        cleaned_input: dict,
+        user_id_hash: str | None,
+    ) -> dict:
+        """Initialize a workflow task by delegating to orchestrator.
+
+        Workflows are processed asynchronously via subtasks.
+        This method initializes the workflow and returns immediately.
+
+        Args:
+            conn: Database connection
+            cur: Database cursor
+            task_input: Original task input (with trace context)
+            cleaned_input: Task input with trace context removed
+            user_id_hash: User ID hash for tracking
+
+        Returns:
+            Empty result dict (workflow completion happens via subtasks)
+        """
+        tenant_id = cleaned_input.pop("_tenant_id", None)
+        workflow_type = extract_workflow_type(self.task_type)
+        orchestrator = get_orchestrator(workflow_type)
+
+        # Initialize workflow - creates subtasks asynchronously
+        # Pass original task_input to preserve trace context
+        orchestrator.create_workflow(self.task_id, task_input, conn, user_id_hash, tenant_id)
+
+        # Workflow tasks don't complete immediately
+        # They're marked as running and complete when all subtasks finish
+        # Return empty result - actual completion happens in process_subtask_completion
+        return {
+            "output": {"status": "workflow_initialized", "workflow_type": workflow_type},
+            "usage": None,
+        }
+
     def _report_results(self, conn: object, success: bool) -> bool:
         """Report task results to database.
 
@@ -458,10 +642,6 @@ class TaskStateMachine:
         Returns:
             True if reporting succeeded, False otherwise
         """
-        from psycopg2.extras import Json, RealDictCursor
-
-        from app.audit import log_audit_event
-
         cur = conn.cursor(cursor_factory=RealDictCursor)  # type: ignore[attr-defined]
 
         try:
@@ -508,8 +688,7 @@ class TaskStateMachine:
                 conn.commit()  # type: ignore[attr-defined]
 
                 # Notify API
-                from app.worker import notify_api_async
-
+                # Notify API
                 notify_api_async(self.task_id, "done", output=self.context.output_data)
 
                 # Audit log: Task completed
@@ -540,8 +719,7 @@ class TaskStateMachine:
                 conn.commit()  # type: ignore[attr-defined]
 
                 # Notify API
-                from app.worker import notify_api_async
-
+                # Notify API
                 notify_api_async(self.task_id, "error", error=self.context.error)
 
                 # Audit log: Task failed
