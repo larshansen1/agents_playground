@@ -131,17 +131,17 @@ class ReportGeneratorAgent(Agent):
 
         md = f"""# API Governance Compliance Report
 
-**API:** {report_data['spec_title']} (v{report_data['spec_version']})
-**Ruleset:** {report_data['ruleset_id']}
-**Analysis Date:** {report_data['analyzed_at']}
+**API:** {report_data["spec_title"]} (v{report_data["spec_version"]})
+**Ruleset:** {report_data["ruleset_id"]}
+**Analysis Date:** {report_data["analyzed_at"]}
 
 ## Executive Summary
 
-- **Compliance Score:** {summary['compliance_percentage']}% ({summary['compliant']}/{summary['total_checks']} checks passed)
-- **Violations:** {summary['violations']}
-  - Critical: {summary['severity_breakdown'].get('CRITICAL', 0)}
-  - Major: {summary['severity_breakdown'].get('MAJOR', 0)}
-  - Minor: {summary['severity_breakdown'].get('MINOR', 0)}
+- **Compliance Score:** {summary["compliance_percentage"]}% ({summary["compliant"]}/{summary["total_checks"]} checks passed)
+- **Violations:** {summary["violations"]}
+  - Critical: {summary["severity_breakdown"].get("CRITICAL", 0)}
+  - Major: {summary["severity_breakdown"].get("MAJOR", 0)}
+  - Minor: {summary["severity_breakdown"].get("MINOR", 0)}
 
 ## Findings
 
@@ -154,17 +154,17 @@ class ReportGeneratorAgent(Agent):
         if violations:
             md += "### ❌ Violations\n\n"
             for finding in violations:
-                md += f"""#### {finding['check_id']} - {finding['severity']}
+                md += f"""#### {finding["check_id"]} - {finding["severity"]}
 
-**Status:** {finding['status']}
-**Confidence:** {finding['confidence']}
-**Effort:** {finding.get('effort_estimate', 'N/A')}
+**Status:** {finding["status"]}
+**Confidence:** {finding["confidence"]}
+**Effort:** {finding.get("effort_estimate", "N/A")}
 
-**Evidence:** {finding['evidence'].get('evidence_text', 'N/A')}
+**Evidence:** {finding["evidence"].get("evidence_text", "N/A")}
 
-**Reasoning:** {finding['reasoning']}
+**Reasoning:** {finding["reasoning"]}
 
-**Recommendation:** {finding.get('recommendation', 'N/A')}
+**Recommendation:** {finding.get("recommendation", "N/A")}
 
 ---
 
