@@ -1,0 +1,517 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Borgere API",
+    "description": "API til håndtering af borgerdata i overensstemmelse med FDA retningslinjer.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support",
+      "email": "api@myndighed.dk",
+      "url": "https://myndighed.dk/support"
+    },
+    "termsOfService": "https://myndighed.dk/vilkaar",
+    "x-klassifikation": "KLE 27.00.00",
+    "x-accessRestriction": "FORTROLIG"
+  },
+  "servers": [
+    {
+      "url": "https://api.myndighed.dk/v1",
+      "description": "Production"
+    },
+    {
+      "url": "https://api-test.myndighed.dk/v1",
+      "description": "Test"
+    }
+  ],
+  "paths": {
+    "/borgere": {
+      "get": {
+        "operationId": "listBorgere",
+        "summary": "Hent liste af borgere",
+        "description": "Returnerer en pagineret liste af borgere baseret på søgeparametre.",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Søgestreng for navn eller adresse",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maksimalt antal resultater per side",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Antal resultater at springe over",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste af borgere",
+            "headers": {
+              "X-Total-Count": {
+                "description": "Totalt antal matchende borgere",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Borger"
+                      }
+                    },
+                    "_links": {
+                      "$ref": "#/components/schemas/PaginationLinks"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ugyldig forespørgsel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Ikke autoriseret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": ["borgere:read"]
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createBorger",
+        "summary": "Opret ny borger",
+        "description": "Opretter en ny borger i systemet.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorgerInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Borger oprettet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Borger"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ugyldig input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Borger eksisterer allerede",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": ["borgere:write"]
+          }
+        ]
+      }
+    },
+    "/borgere/{id}": {
+      "get": {
+        "operationId": "getBorger",
+        "summary": "Hent borger",
+        "description": "Returnerer detaljer for en specifik borger.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Unik identifikator for borger (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Borger detaljer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Borger"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Borger ikke fundet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": ["borgere:read"]
+          }
+        ]
+      },
+      "put": {
+        "operationId": "updateBorger",
+        "summary": "Opdater borger",
+        "description": "Opdaterer en eksisterende borger.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Unik identifikator for borger (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BorgerInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Borger opdateret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Borger"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ugyldig input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Borger ikke fundet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": ["borgere:write"]
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteBorger",
+        "summary": "Slet borger",
+        "description": "Sletter en borger fra systemet.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Unik identifikator for borger (UUID)",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Borger slettet"
+          },
+          "404": {
+            "description": "Borger ikke fundet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "oauth2": ["borgere:admin"]
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthCheck",
+        "summary": "Sundhedstjek",
+        "description": "Returnerer API sundhedsstatus.",
+        "responses": {
+          "200": {
+            "description": "API er tilgængeligt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["healthy", "degraded", "unhealthy"]
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service utilgængelig"
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Borger": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unik identifikator"
+          },
+          "navn": {
+            "type": "string",
+            "description": "Fulde navn"
+          },
+          "adresse": {
+            "$ref": "#/components/schemas/Adresse"
+          },
+          "oprettet": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Oprettelsestidspunkt"
+          },
+          "opdateret": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Seneste opdatering"
+          },
+          "_links": {
+            "$ref": "#/components/schemas/ResourceLinks"
+          }
+        }
+      },
+      "BorgerInput": {
+        "type": "object",
+        "required": ["navn"],
+        "properties": {
+          "navn": {
+            "type": "string",
+            "description": "Fulde navn"
+          },
+          "adresse": {
+            "$ref": "#/components/schemas/AdresseInput"
+          }
+        }
+      },
+      "Adresse": {
+        "type": "object",
+        "properties": {
+          "vejnavn": {
+            "type": "string"
+          },
+          "husnummer": {
+            "type": "string"
+          },
+          "postnummer": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "AdresseInput": {
+        "type": "object",
+        "properties": {
+          "vejnavn": {
+            "type": "string"
+          },
+          "husnummer": {
+            "type": "string"
+          },
+          "postnummer": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Fejlkode"
+          },
+          "message": {
+            "type": "string",
+            "description": "Fejlbeskrivelse"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "PaginationLinks": {
+        "type": "object",
+        "properties": {
+          "self": {
+            "type": "string",
+            "format": "uri"
+          },
+          "first": {
+            "type": "string",
+            "format": "uri"
+          },
+          "prev": {
+            "type": "string",
+            "format": "uri"
+          },
+          "next": {
+            "type": "string",
+            "format": "uri"
+          },
+          "last": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "ResourceLinks": {
+        "type": "object",
+        "properties": {
+          "self": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "description": "OAuth 2.0 autorisation med OIDC",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://login.myndighed.dk/authorize",
+            "tokenUrl": "https://login.myndighed.dk/token",
+            "scopes": {
+              "borgere:read": "Læs borgerdata",
+              "borgere:write": "Opret og opdater borgere",
+              "borgere:admin": "Administrer borgere"
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "oauth2": []
+    }
+  ]
+}

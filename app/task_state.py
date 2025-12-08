@@ -25,6 +25,7 @@ from app.orchestrator import (
     extract_workflow_type,
     get_orchestrator,
     is_agent_task,
+    is_analysis_task,
     is_tool_task,
     is_workflow_task,
 )
@@ -283,9 +284,9 @@ class TaskStateMachine:
             # Execute task processing
             success = self._execute_processing(conn)
 
-            # Special handling for workflow tasks which are async
-            if success and is_workflow_task(self.task_type):
-                # Async workflow started, return result in current state (PROCESSING)
+            # Special handling for workflow and analysis tasks which are async
+            if success and (is_workflow_task(self.task_type) or is_analysis_task(self.task_type)):
+                # Async workflow/analysis started, return result in current state (PROCESSING)
                 # Do not transition to REPORTING/COMPLETED
                 self.context.processing_completed_at = datetime.now(UTC)
                 duration_ms = int((time.time() - start_time) * 1000)
@@ -501,9 +502,9 @@ class TaskStateMachine:
             conn.commit()  # type: ignore[attr-defined]
 
             # Route to appropriate execution handler based on task type
-            if is_workflow_task(self.task_type):
-                # Workflow tasks are handled asynchronously via orchestrator
-                # They create subtasks and complete later via process_subtask_completion
+            if is_analysis_task(self.task_type) or is_workflow_task(self.task_type):
+                # Analysis tasks (like analysis:fda) and workflow tasks are handled via orchestrator
+                # They create subtasks and complete async later via process_subtask_completion
                 result = self._process_workflow_task_execution(
                     conn, cur, task_input, cleaned_input, user_id_hash
                 )
@@ -530,8 +531,8 @@ class TaskStateMachine:
             self.context._usage = usage  # type: ignore
             self.context._user_id_hash = user_id_hash  # type: ignore
 
-            # Transition to reporting (unless async workflow)
-            if not is_workflow_task(self.task_type):
+            # Transition to reporting (unless async workflow or analysis)
+            if not (is_workflow_task(self.task_type) or is_analysis_task(self.task_type)):
                 self.transition(TaskEvent.PROCESSING_SUCCEEDED)
             return True
 
@@ -603,14 +604,14 @@ class TaskStateMachine:
         cleaned_input: dict,
         user_id_hash: str | None,
     ) -> dict:
-        """Initialize a workflow task by delegating to orchestrator.
+        """Initialize a workflow or analysis task by delegating to orchestrator.
 
-        Workflows are processed asynchronously via subtasks.
-        This method initializes the workflow and returns immediately.
+        Workflows and analysis tasks are processed asynchronously via subtasks.
+        This method initializes the workflow/analysis and returns immediately.
 
         Args:
             conn: Database connection
-            cur: Database cursor
+            _cur: Database cursor
             task_input: Original task input (with trace context)
             cleaned_input: Task input with trace context removed
             user_id_hash: User ID hash for tracking
@@ -619,7 +620,14 @@ class TaskStateMachine:
             Empty result dict (workflow completion happens via subtasks)
         """
         tenant_id = cleaned_input.pop("_tenant_id", None)
-        workflow_type = extract_workflow_type(self.task_type)
+
+        # For analysis: tasks, use full task type (e.g., "analysis:fda")
+        # For workflow: tasks, extract the workflow type
+        if is_analysis_task(self.task_type):
+            workflow_type = self.task_type  # Use full "analysis:fda" as it's in registry
+        else:
+            workflow_type = extract_workflow_type(self.task_type)
+
         orchestrator = get_orchestrator(workflow_type)
 
         # Initialize workflow - creates subtasks asynchronously

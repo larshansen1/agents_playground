@@ -19,6 +19,7 @@ from app.metrics import (
 from app.models import Task
 from app.schemas import (
     AgentTaskRequest,
+    AnalysisTaskRequest,
     TaskCreate,
     TaskResponse,
     TaskStatusUpdate,
@@ -311,6 +312,118 @@ async def create_tool_task(
         "tool_task_created",
         task_id=str(task.id),
         tool_name=task_request.tool_name,
+        status=task.status,
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+        duration_seconds=f"{duration:.3f}",
+    )
+
+    # Broadcast task creation
+    await manager.broadcast(
+        TaskStatusUpdate(
+            task_id=task.id,
+            status=task.status,
+            type=task.type,
+            output=task.output,
+            error=task.error,
+            updated_at=task.updated_at,
+        )
+    )
+
+    return TaskResponse.model_validate(task)
+
+
+@router.post("/analysis", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_analysis_task(
+    task_request: AnalysisTaskRequest,
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> TaskResponse:
+    """
+    Create a governance analysis task for OpenAPI spec validation.
+
+    Submits an OpenAPI specification for FDA compliance analysis.
+    The analysis runs through 4 phases:
+    1. SpecParser - validates OpenAPI structure
+    2. GuidelineChecker - checks FDA compliance rules
+    3. SeverityAssessor - prioritizes violations
+    4. ReportGenerator - creates compliance reports
+
+    Returns:
+        Task with status 'pending', worker will process asynchronously
+    """
+    start_time = time.time()
+
+    # Extract user and tenant context
+    user_id = task_request.user_id
+    tenant_id = task_request.tenant_id
+
+    # Hash the user_id if provided
+    user_id_hash = None
+    if user_id:
+        user_id_hash = hashlib.sha256(user_id.encode()).hexdigest()
+
+    # Prepare input for orchestrator
+    task_input = {
+        "spec_content": task_request.spec_content,
+        "spec_format": task_request.spec_format,
+        "ruleset_id": task_request.ruleset_id,
+        "output_formats": task_request.output_formats,
+    }
+
+    # Inject trace context
+    if "_trace_context" not in task_input:
+        task_input_with_context = inject_trace_context(task_input)
+    else:
+        task_input_with_context = task_input
+
+    # Inject user context
+    if user_id_hash:
+        task_input_with_context["_user_id_hash"] = user_id_hash
+    if tenant_id:
+        task_input_with_context["_tenant_id"] = tenant_id
+
+    # Create task with analysis:fda type
+    task_type = "analysis:fda"
+
+    task = Task(
+        type=task_type,
+        input=task_input_with_context,
+        status="pending",
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+    )
+
+    db.add(task)
+
+    # Log audit event
+    audit_log = log_task_created(
+        db,
+        task_id=task.id,
+        task_type=task.type,
+        user_id_hash=user_id_hash,
+        tenant_id=tenant_id,
+    )
+    db.add(audit_log)
+
+    await db.commit()
+
+    # Reload with relationships
+    result = await db.execute(
+        select(Task)
+        .options(selectinload(Task.subtasks), selectinload(Task.workflow_state))
+        .where(Task.id == task.id)
+    )
+    task = result.scalar_one()
+
+    # Track metrics
+    tasks_created_total.labels(task_type=task.type).inc()
+    duration = time.time() - start_time
+
+    # Log event
+    logger.info(
+        "analysis_task_created",
+        task_id=str(task.id),
+        ruleset_id=task_request.ruleset_id,
         status=task.status,
         user_id_hash=user_id_hash,
         tenant_id=tenant_id,

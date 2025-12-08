@@ -4,7 +4,11 @@ import logging
 
 from app.agents.assessment_agent import AssessmentAgent
 from app.agents.base import Agent
+from app.agents.guideline_checker_agent import GuidelineCheckerAgent
+from app.agents.report_generator_agent import ReportGeneratorAgent
 from app.agents.research_agent import ResearchAgent
+from app.agents.severity_assessor_agent import SeverityAssessorAgent
+from app.agents.spec_parser_agent import SpecParserAgent
 
 # Import registry for dynamic agent lookup
 try:
@@ -46,6 +50,11 @@ def get_agent(agent_type: str) -> Agent:
     agent_map = {
         "research": ResearchAgent,
         "assessment": AssessmentAgent,
+        # FDA governance agents
+        "spec_parser": SpecParserAgent,
+        "guideline_checker": GuidelineCheckerAgent,
+        "severity_assessor": SeverityAssessorAgent,
+        "report_generator": ReportGeneratorAgent,
     }
 
     agent_class = agent_map.get(agent_type)
@@ -53,4 +62,4 @@ def get_agent(agent_type: str) -> Agent:
         msg = f"Unknown agent type: '{agent_type}'. Available: {list(agent_map.keys())}"
         raise ValueError(msg)
 
-    return agent_class()
+    return agent_class()  # type: ignore[abstract]

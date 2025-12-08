@@ -1,0 +1,757 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "ruleset_id": "FDA-DK-2024-1.0",
+  "ruleset_name": "Danish FDA API Guidelines (Retningslinjer for webservices)",
+  "version": "1.0.0",
+  "effective_date": "2024-01-01",
+  "source_url": "https://arkitektur.digst.dk/metoder/begrebs-og-datametoder/retningslinjer-webservices",
+  "description": "Fællesoffentlige retningslinjer for REST webservices i den offentlige sektor",
+  "categories": [
+    {
+      "id": "documentation",
+      "name_en": "Service Documentation",
+      "name_da": "Servicedokumentation"
+    },
+    {
+      "id": "versioning",
+      "name_en": "Service Versioning",
+      "name_da": "Serviceversionering"
+    },
+    {
+      "id": "resource_modeling",
+      "name_en": "REST Resource Modeling",
+      "name_da": "Modellering af REST webservices"
+    },
+    {
+      "id": "error_handling",
+      "name_en": "Service Error Messages",
+      "name_da": "Servicefejlmeddelelser"
+    },
+    {
+      "id": "security",
+      "name_en": "Security Requirements",
+      "name_da": "Sikkerhedskrav"
+    },
+    {
+      "id": "data_representation",
+      "name_en": "Data Representation",
+      "name_da": "Datarepræsentation"
+    },
+    {
+      "id": "search_pagination",
+      "name_en": "Search and Pagination",
+      "name_da": "Søgning og paginering"
+    },
+    {
+      "id": "logging",
+      "name_en": "Service Logging",
+      "name_da": "Servicelogning"
+    }
+  ],
+  "rules": [
+    {
+      "id": "R06",
+      "name_en": "Document according to framework",
+      "name_da": "Dokumentér udstillede webservices i overensstemmelse med den fællesoffentlige dokumentationsramme",
+      "category": "documentation",
+      "priority": "MUST",
+      "severity_default": "CRITICAL",
+      "description": "REST webservices shall use OpenAPI specification with required metadata elements per Bilag 1",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R06-01",
+          "name": "OpenAPI version declared",
+          "spec_path": "$.openapi",
+          "validation": {
+            "type": "exists"
+          },
+          "evidence_template": "OpenAPI version field {status} at $.openapi",
+          "severity": "CRITICAL"
+        },
+        {
+          "check_id": "R06-02",
+          "name": "Service title present",
+          "spec_path": "$.info.title",
+          "validation": {
+            "type": "exists_and_non_empty"
+          },
+          "evidence_template": "Service title {status} at $.info.title",
+          "severity": "CRITICAL"
+        },
+        {
+          "check_id": "R06-03",
+          "name": "Service description present",
+          "spec_path": "$.info.description",
+          "validation": {
+            "type": "exists_and_non_empty"
+          },
+          "evidence_template": "Service description {status} at $.info.description",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "R06-04",
+          "name": "Service version present",
+          "spec_path": "$.info.version",
+          "validation": {
+            "type": "exists_and_non_empty"
+          },
+          "evidence_template": "Service version {status} at $.info.version",
+          "severity": "CRITICAL"
+        },
+        {
+          "check_id": "R06-05",
+          "name": "Server URL defined",
+          "spec_path": "$.servers[*].url",
+          "validation": {
+            "type": "array_min_length",
+            "min": 1
+          },
+          "evidence_template": "Server URL(s) {status} at $.servers",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "R06-06",
+          "name": "Contact name present",
+          "spec_path": "$.info.contact.name",
+          "validation": {
+            "type": "exists_and_non_empty"
+          },
+          "evidence_template": "Contact name {status} at $.info.contact.name",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "R06-07",
+          "name": "Contact email present",
+          "spec_path": "$.info.contact.email",
+          "validation": {
+            "type": "exists_and_non_empty"
+          },
+          "evidence_template": "Contact email {status} at $.info.contact.email",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "R06-08",
+          "name": "Contact URL present",
+          "spec_path": "$.info.contact.url",
+          "validation": {
+            "type": "exists_and_non_empty"
+          },
+          "evidence_template": "Contact URL {status} at $.info.contact.url",
+          "severity": "MINOR"
+        }
+      ]
+    },
+    {
+      "id": "R07",
+      "name_en": "Tag with classification",
+      "name_da": "Opmærk webservices i henhold til fællesoffentlige emnesystematikker",
+      "category": "documentation",
+      "priority": "SHOULD",
+      "severity_default": "MINOR",
+      "description": "Services should be tagged with KLE or FORM classification codes using x-klassifikation extension",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R07-01",
+          "name": "Classification extension present",
+          "spec_path": "$.info.x-klassifikation",
+          "validation": {
+            "type": "exists"
+          },
+          "evidence_template": "Classification (x-klassifikation) {status} at $.info.x-klassifikation",
+          "severity": "MINOR"
+        }
+      ]
+    },
+    {
+      "id": "R08",
+      "name_en": "Mark data sensitivity",
+      "name_da": "Opmærk webservices med følsomhed eller fortrolighed af data",
+      "category": "documentation",
+      "priority": "SHOULD",
+      "severity_default": "MAJOR",
+      "description": "Document sensitivity/confidentiality level of data transferred",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R08-01",
+          "name": "Access restriction documented",
+          "spec_path": "$.info.x-accessRestriction",
+          "validation": {
+            "type": "exists"
+          },
+          "evidence_template": "Access restriction (x-accessRestriction) {status} at $.info.x-accessRestriction",
+          "severity": "MINOR"
+        }
+      ]
+    },
+    {
+      "id": "R09",
+      "name_en": "Document error codes",
+      "name_da": "Dokumentér servicespecifikke fejlkoder for webservices",
+      "category": "error_handling",
+      "priority": "MUST",
+      "severity_default": "MAJOR",
+      "description": "All service-specific errors must be documented with codes, descriptions, causes",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R09-01",
+          "name": "Error responses documented per operation",
+          "spec_path": "$.paths[*][*].responses",
+          "validation": {
+            "type": "custom",
+            "validator": "has_error_responses"
+          },
+          "evidence_template": "Error response documentation {status} for operations",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "R09-02",
+          "name": "4xx responses have descriptions",
+          "spec_path": "$.paths[*][*].responses.4*",
+          "validation": {
+            "type": "custom",
+            "validator": "error_responses_have_descriptions"
+          },
+          "evidence_template": "4xx error descriptions {status}",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "R09-03",
+          "name": "5xx responses have descriptions",
+          "spec_path": "$.paths[*][*].responses.5*",
+          "validation": {
+            "type": "custom",
+            "validator": "error_responses_have_descriptions"
+          },
+          "evidence_template": "5xx error descriptions {status}",
+          "severity": "MAJOR"
+        }
+      ]
+    },
+    {
+      "id": "R11",
+      "name_en": "Use semantic versioning",
+      "name_da": "Anvend semantisk versionering af webservices",
+      "category": "versioning",
+      "priority": "MUST",
+      "severity_default": "MAJOR",
+      "description": "Use semantic versioning (Major.Minor.Patch). Major = breaking change, Minor = backward compatible additions",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R11-01",
+          "name": "Version follows semver format",
+          "spec_path": "$.info.version",
+          "validation": {
+            "type": "regex",
+            "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+          },
+          "evidence_template": "Version '{value}' {status} semantic versioning format (X.Y.Z)",
+          "severity": "MAJOR"
+        }
+      ]
+    },
+    {
+      "id": "R16",
+      "name_en": "Support monitoring",
+      "name_da": "Understøt monitorering af udstillede webservices",
+      "category": "logging",
+      "priority": "MUST",
+      "severity_default": "MINOR",
+      "description": "Expose availability/health endpoint. No authentication required. Must not modify data.",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R16-01",
+          "name": "Health endpoint present",
+          "spec_path": "$.paths",
+          "validation": {
+            "type": "custom",
+            "validator": "has_health_endpoint",
+            "patterns": ["/health", "/healthz", "/status", "/ping", "/ready", "/live"]
+          },
+          "evidence_template": "Health/monitoring endpoint {status}",
+          "severity": "MINOR"
+        }
+      ]
+    },
+    {
+      "id": "R23",
+      "name_en": "Token-based security",
+      "name_da": "Webservices skal have tokenbaseret sikkerhed",
+      "category": "security",
+      "priority": "MUST",
+      "severity_default": "CRITICAL",
+      "description": "Use federated token-based authentication. No point-to-point certificate auth (except TLS).",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R23-01",
+          "name": "Security schemes defined",
+          "spec_path": "$.components.securitySchemes",
+          "validation": {
+            "type": "exists"
+          },
+          "evidence_template": "Security schemes {status} at $.components.securitySchemes",
+          "severity": "CRITICAL"
+        },
+        {
+          "check_id": "R23-02",
+          "name": "Token-based auth scheme present",
+          "spec_path": "$.components.securitySchemes",
+          "validation": {
+            "type": "custom",
+            "validator": "has_token_auth",
+            "allowed_types": ["oauth2", "openIdConnect", "http:bearer", "apiKey"]
+          },
+          "evidence_template": "Token-based authentication {status}",
+          "severity": "MAJOR"
+        }
+      ]
+    },
+    {
+      "id": "R24",
+      "name_en": "Expose as REST resources",
+      "name_da": "Udstil webservices som REST ressourcer",
+      "category": "resource_modeling",
+      "priority": "MUST",
+      "severity_default": "MAJOR",
+      "description": "Follow REST architectural style for CRUD operations on resources",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R24-01",
+          "name": "Paths defined",
+          "spec_path": "$.paths",
+          "validation": {
+            "type": "object_min_keys",
+            "min": 1
+          },
+          "evidence_template": "API paths {status} (found {count} paths)",
+          "severity": "CRITICAL"
+        }
+      ]
+    },
+    {
+      "id": "R28",
+      "name_en": "Name as nouns per REST style",
+      "name_da": "Navngiv REST ressourcer ud fra REST arkitekturstilen",
+      "category": "resource_modeling",
+      "priority": "MUST",
+      "severity_default": "MINOR",
+      "description": "Resources should be named as nouns, not operations. No verbs in URIs.",
+      "check_type": "semantic",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R28-01",
+          "name": "No verbs in resource paths",
+          "spec_path": "$.paths",
+          "validation": {
+            "type": "custom",
+            "validator": "no_verbs_in_paths",
+            "verb_patterns": ["get", "create", "update", "delete", "fetch", "retrieve", "remove", "add", "modify", "hent", "opret", "opdater", "slet"]
+          },
+          "evidence_template": "Path naming {status}. {details}",
+          "severity": "MINOR"
+        }
+      ]
+    },
+    {
+      "id": "R29",
+      "name_en": "Unique stable identifiers",
+      "name_da": "Udstillede REST ressourcer har unikke, sikre identifikatorer",
+      "category": "resource_modeling",
+      "priority": "MUST",
+      "severity_default": "MAJOR",
+      "description": "URIs must be unique, stable over resource lifetime, contain no sensitive data",
+      "check_type": "semantic",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R29-01",
+          "name": "No sensitive data in paths",
+          "spec_path": "$.paths",
+          "validation": {
+            "type": "custom",
+            "validator": "no_sensitive_path_params",
+            "sensitive_patterns": ["cpr", "personnummer", "password", "secret", "token", "ssn", "cvr"]
+          },
+          "evidence_template": "Path parameter security {status}. {details}",
+          "severity": "CRITICAL"
+        }
+      ]
+    },
+    {
+      "id": "R32",
+      "name_en": "Standardized search parameters",
+      "name_da": "Anvend standardiserede REST fremsøgningsparametre",
+      "category": "search_pagination",
+      "priority": "SHOULD",
+      "severity_default": "MINOR",
+      "description": "Use standard parameters: q (query), sort, fields (projection), embed (related objects)",
+      "check_type": "semantic",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R32-01",
+          "name": "Standard search parameters used",
+          "spec_path": "$.paths[*].get.parameters",
+          "validation": {
+            "type": "custom",
+            "validator": "uses_standard_search_params",
+            "standard_params": ["q", "sort", "fields", "embed", "filter", "search"]
+          },
+          "evidence_template": "Search parameter naming {status}. {details}",
+          "severity": "INFO"
+        }
+      ]
+    },
+    {
+      "id": "R33",
+      "name_en": "Support pagination",
+      "name_da": "Understøt søgning med delresultater",
+      "category": "search_pagination",
+      "priority": "SHOULD",
+      "severity_default": "MINOR",
+      "description": "Support pagination for large result sets. Use X-Total-Count header and Link header.",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R33-01",
+          "name": "Pagination parameters on collection endpoints",
+          "spec_path": "$.paths",
+          "validation": {
+            "type": "custom",
+            "validator": "collection_endpoints_have_pagination",
+            "pagination_params": ["limit", "offset", "page", "pageSize", "per_page", "cursor"]
+          },
+          "evidence_template": "Pagination support {status}. {details}",
+          "severity": "MINOR"
+        }
+      ]
+    },
+    {
+      "id": "R34",
+      "name_en": "Standardized data format",
+      "name_da": "Repræsentér REST ressourcer i et standardiseret dataformat",
+      "category": "data_representation",
+      "priority": "MUST",
+      "severity_default": "MAJOR",
+      "description": "Use JSON or XML. Return format requested by consumer via Accept header.",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R34-01",
+          "name": "JSON content type supported",
+          "spec_path": "$.paths[*][*].responses[*].content",
+          "validation": {
+            "type": "custom",
+            "validator": "supports_json_content_type"
+          },
+          "evidence_template": "JSON content type {status}",
+          "severity": "MAJOR"
+        }
+      ]
+    },
+    {
+      "id": "R35",
+      "name_en": "Declare representations",
+      "name_da": "Deklarér REST ressourcer datarepræsentationer",
+      "category": "data_representation",
+      "priority": "MUST",
+      "severity_default": "MAJOR",
+      "description": "Document supported formats in OpenAPI",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R35-01",
+          "name": "Response schemas defined",
+          "spec_path": "$.paths[*][*].responses.200.content[*].schema",
+          "validation": {
+            "type": "custom",
+            "validator": "success_responses_have_schemas"
+          },
+          "evidence_template": "Response schema definitions {status}. {details}",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "R35-02",
+          "name": "Request body schemas defined",
+          "spec_path": "$.paths[*][post,put,patch].requestBody.content[*].schema",
+          "validation": {
+            "type": "custom",
+            "validator": "request_bodies_have_schemas"
+          },
+          "evidence_template": "Request body schema definitions {status}. {details}",
+          "severity": "MAJOR"
+        }
+      ]
+    },
+    {
+      "id": "R37",
+      "name_en": "Use HTTP",
+      "name_da": "Anvend HTTP som fællesoffentlig REST kommunikationsprotokol",
+      "category": "data_representation",
+      "priority": "MUST",
+      "severity_default": "MAJOR",
+      "description": "HTTP is the standard protocol. Use proper HTTP methods and status codes.",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R37-01",
+          "name": "Correct HTTP methods used",
+          "spec_path": "$.paths[*]",
+          "validation": {
+            "type": "custom",
+            "validator": "uses_standard_http_methods",
+            "allowed_methods": ["get", "post", "put", "patch", "delete", "head", "options"]
+          },
+          "evidence_template": "HTTP method usage {status}",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "R37-02",
+          "name": "GET operations are read-only",
+          "spec_path": "$.paths[*].get",
+          "validation": {
+            "type": "custom",
+            "validator": "get_has_no_request_body"
+          },
+          "evidence_template": "GET operations {status} (should not have request body)",
+          "severity": "MINOR"
+        }
+      ]
+    },
+    {
+      "id": "R39",
+      "name_en": "Secure HTTP",
+      "name_da": "Anvend HTTP sikkert til REST ressourcer",
+      "category": "security",
+      "priority": "MUST",
+      "severity_default": "CRITICAL",
+      "description": "Require HTTPS (TLS 1.1+). Reject unsecure HTTP with error (no redirect).",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "R39-01",
+          "name": "Server URLs use HTTPS",
+          "spec_path": "$.servers[*].url",
+          "validation": {
+            "type": "custom",
+            "validator": "urls_use_https"
+          },
+          "evidence_template": "Server URL security {status}. {details}",
+          "severity": "CRITICAL"
+        }
+      ]
+    },
+    {
+      "id": "BILAG1-OPS",
+      "name_en": "Operation documentation",
+      "name_da": "Operationsdokumentation",
+      "category": "documentation",
+      "priority": "MUST",
+      "severity_default": "MAJOR",
+      "description": "Each operation must have operationId and description per Bilag 1",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "BILAG1-OPS-01",
+          "name": "Operations have operationId",
+          "spec_path": "$.paths[*][*].operationId",
+          "validation": {
+            "type": "custom",
+            "validator": "all_operations_have_operation_id"
+          },
+          "evidence_template": "Operation IDs {status}. {details}",
+          "severity": "MAJOR"
+        },
+        {
+          "check_id": "BILAG1-OPS-02",
+          "name": "Operations have descriptions",
+          "spec_path": "$.paths[*][*].description",
+          "validation": {
+            "type": "custom",
+            "validator": "all_operations_have_descriptions"
+          },
+          "evidence_template": "Operation descriptions {status}. {details}",
+          "severity": "MINOR"
+        },
+        {
+          "check_id": "BILAG1-OPS-03",
+          "name": "Operation IDs are unique",
+          "spec_path": "$.paths[*][*].operationId",
+          "validation": {
+            "type": "custom",
+            "validator": "operation_ids_unique"
+          },
+          "evidence_template": "Operation ID uniqueness {status}. {details}",
+          "severity": "MAJOR"
+        }
+      ]
+    },
+    {
+      "id": "BILAG1-PARAMS",
+      "name_en": "Parameter documentation",
+      "name_da": "Parameterdokumentation",
+      "category": "documentation",
+      "priority": "SHOULD",
+      "severity_default": "MINOR",
+      "description": "Parameters should have name, description, in (location), per Bilag 1",
+      "check_type": "structural",
+      "automatable": true,
+      "checks": [
+        {
+          "check_id": "BILAG1-PARAMS-01",
+          "name": "Parameters have descriptions",
+          "spec_path": "$.paths[*][*].parameters[*]",
+          "validation": {
+            "type": "custom",
+            "validator": "parameters_have_descriptions"
+          },
+          "evidence_template": "Parameter descriptions {status}. {details}",
+          "severity": "MINOR"
+        }
+      ]
+    }
+  ],
+  "severity_definitions": {
+    "CRITICAL": {
+      "description": "Must be fixed before production deployment. Blocks compliance.",
+      "weight": 4
+    },
+    "MAJOR": {
+      "description": "Should be fixed. Significant deviation from guidelines.",
+      "weight": 3
+    },
+    "MINOR": {
+      "description": "Recommended improvement. Does not block deployment.",
+      "weight": 2
+    },
+    "INFO": {
+      "description": "Informational finding. Best practice suggestion.",
+      "weight": 1
+    }
+  },
+  "priority_definitions": {
+    "MUST": {
+      "description": "Mandatory requirement (SKAL in Danish guidelines)",
+      "compliance_required": true
+    },
+    "SHOULD": {
+      "description": "Recommended requirement (BØR in Danish guidelines)",
+      "compliance_required": false
+    },
+    "MAY": {
+      "description": "Optional requirement (KAN in Danish guidelines)",
+      "compliance_required": false
+    }
+  },
+  "validators": {
+    "has_error_responses": {
+      "description": "Check that operations define 4xx or 5xx responses",
+      "implementation": "For each operation, verify at least one response code matches 4xx or 5xx pattern"
+    },
+    "error_responses_have_descriptions": {
+      "description": "Check that error responses have description field",
+      "implementation": "For each 4xx/5xx response, verify description is non-empty"
+    },
+    "has_health_endpoint": {
+      "description": "Check for presence of health/monitoring endpoint",
+      "implementation": "Search paths for common health endpoint patterns"
+    },
+    "has_token_auth": {
+      "description": "Check for token-based authentication scheme",
+      "implementation": "Verify securitySchemes contains oauth2, openIdConnect, bearer, or apiKey"
+    },
+    "no_verbs_in_paths": {
+      "description": "Check that path segments don't contain verbs",
+      "implementation": "Split paths and check segments against verb pattern list"
+    },
+    "no_sensitive_path_params": {
+      "description": "Check path parameters don't contain sensitive data identifiers",
+      "implementation": "Check path parameter names against sensitive pattern list"
+    },
+    "uses_standard_search_params": {
+      "description": "Check GET operations use standard search parameter names",
+      "implementation": "For GET operations with query params, check names against standard list"
+    },
+    "collection_endpoints_have_pagination": {
+      "description": "Check collection endpoints support pagination",
+      "implementation": "Identify collection endpoints (plural nouns without ID), verify pagination params"
+    },
+    "supports_json_content_type": {
+      "description": "Check responses support application/json",
+      "implementation": "Verify at least one response has application/json content type"
+    },
+    "success_responses_have_schemas": {
+      "description": "Check 2xx responses define schemas",
+      "implementation": "For 200/201 responses, verify schema is defined"
+    },
+    "request_bodies_have_schemas": {
+      "description": "Check POST/PUT/PATCH request bodies define schemas",
+      "implementation": "For operations with requestBody, verify schema is defined"
+    },
+    "uses_standard_http_methods": {
+      "description": "Check only standard HTTP methods are used",
+      "implementation": "Verify all path methods are in allowed list"
+    },
+    "get_has_no_request_body": {
+      "description": "Check GET operations don't define request body",
+      "implementation": "Verify GET operations don't have requestBody field"
+    },
+    "urls_use_https": {
+      "description": "Check server URLs use HTTPS scheme",
+      "implementation": "Parse server URLs, verify scheme is https (allow localhost exception for dev)"
+    },
+    "all_operations_have_operation_id": {
+      "description": "Check all operations define operationId",
+      "implementation": "For each operation, verify operationId is present and non-empty"
+    },
+    "all_operations_have_descriptions": {
+      "description": "Check all operations have descriptions",
+      "implementation": "For each operation, verify description or summary is present"
+    },
+    "operation_ids_unique": {
+      "description": "Check operationIds are unique across spec",
+      "implementation": "Collect all operationIds, verify no duplicates"
+    },
+    "parameters_have_descriptions": {
+      "description": "Check parameters have descriptions",
+      "implementation": "For each parameter, verify description is present"
+    }
+  },
+  "metadata": {
+    "created_at": "2024-12-07",
+    "created_by": "FDA API Governance Review System",
+    "source_documents": [
+      "Retningslinjer for webservices (hovedddokument)",
+      "Bilag 1 - Dokumentation for REST webservices",
+      "Bilag 2 - Fejlstruktur og fejlkoder for REST webservices",
+      "Bilag 3 - Nonfunktionelle krav til realisering af retningslinjer",
+      "Bilag 4 - Specifikation for brug af HTTP til REST"
+    ],
+    "total_rules": 17,
+    "total_checks": 32,
+    "automatable_checks": 32,
+    "coverage_notes": "MVP ruleset focusing on structural checks. Semantic and LLM-based checks to be added in future versions."
+  }
+}

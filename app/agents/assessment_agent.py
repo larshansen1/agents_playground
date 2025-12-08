@@ -61,7 +61,6 @@ class AssessmentAgent(Agent):
             extra_headers["X-User-ID"] = user_id_hash
 
         # Call LLM
-        # Type ignored because OpenAI client types are strict about Iterable but accept lists
         resp = client.chat.completions.create(
             model=MODEL_NAME,
             messages=messages,

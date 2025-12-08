@@ -193,3 +193,14 @@ class ToolTaskRequest(BaseModel):
     input: dict[str, Any] = Field(..., description="Input data for the tool")
     user_id: str | None = Field(None, description="User ID initiating the task")
     tenant_id: str | None = Field(None, description="Tenant ID for multi-tenant isolation")
+
+
+class AnalysisTaskRequest(BaseModel):
+    """Request to run governance analysis on an OpenAPI spec."""
+
+    spec_content: str = Field(..., description="OpenAPI specification (JSON or YAML)")
+    spec_format: str = Field(default="auto", description="Format: 'json', 'yaml', or 'auto'")
+    ruleset_id: str = Field(default="FDA-DK-2024-1.0", description="Ruleset to validate against")
+    output_formats: list[str] = Field(default=["json", "markdown"], description="Report formats")
+    user_id: str | None = Field(None, description="User ID initiating the analysis")
+    tenant_id: str | None = Field(None, description="Tenant ID for multi-tenant isolation")

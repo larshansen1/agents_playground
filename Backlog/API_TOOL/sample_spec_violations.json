@@ -1,0 +1,134 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sample API with FDA Violations",
+    "description": "This API deliberately violates several FDA guidelines for testing purposes.",
+    "version": "1.2"
+  },
+  "servers": [
+    {
+      "url": "http://api.example.com/v1",
+      "description": "Production server (HTTP - violates R39)"
+    }
+  ],
+  "paths": {
+    "/getCitizens": {
+      "get": {
+        "summary": "Get all citizens",
+        "responses": {
+          "200": {
+            "description": "List of citizens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Citizen"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/citizens/{cpr}": {
+      "get": {
+        "operationId": "getCitizenByCpr",
+        "summary": "Get citizen by CPR number",
+        "parameters": [
+          {
+            "name": "cpr",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Citizen details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Citizen"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Citizen not found"
+          }
+        }
+      }
+    },
+    "/createCitizen": {
+      "post": {
+        "operationId": "createCitizen",
+        "summary": "Create a new citizen",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CitizenInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Citizen created"
+          }
+        }
+      }
+    },
+    "/deleteCitizen/{id}": {
+      "delete": {
+        "summary": "Delete a citizen",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Citizen": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "cpr": {
+            "type": "string"
+          }
+        }
+      },
+      "CitizenInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -23,6 +23,12 @@ structlog>=24.1.0
 python-json-logger>=2.0.7
 prometheus-fastapi-instrumentator>=7.0.0
 
+# Qdrant client for vector search
+qdrant-client==1.11.3
+
+# OpenAPI validation for governance analysis
+openapi-spec-validator==0.7.1
+
 # Observability - Distributed Tracing
 opentelemetry-api>=1.20.0
 opentelemetry-sdk>=1.20.0

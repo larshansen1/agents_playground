@@ -5,6 +5,7 @@ from pathlib import Path
 from app.logging_config import get_logger
 from app.orchestrator.base import Orchestrator
 from app.orchestrator.declarative_orchestrator import DeclarativeOrchestrator
+from app.orchestrator.fda_analysis_orchestrator import FDAAnalysisOrchestrator
 from app.orchestrator.research_assessment import ResearchAssessmentOrchestrator
 from app.workflow_registry import workflow_registry
 
@@ -13,6 +14,7 @@ logger = get_logger(__name__)
 # Registry mapping workflow types to coded orchestrator classes
 ORCHESTRATOR_REGISTRY: dict[str, type[Orchestrator]] = {
     "research_assessment": ResearchAssessmentOrchestrator,
+    "analysis:fda": FDAAnalysisOrchestrator,
 }
 
 
@@ -178,6 +180,39 @@ def extract_tool_type(task_type: str) -> str:
     """
     if not is_tool_task(task_type):
         msg = f"Not a tool task: {task_type}"
+        raise ValueError(msg)
+
+    return task_type.split(":", 1)[1]
+
+
+def is_analysis_task(task_type: str) -> bool:
+    """
+    Check if a task type is a governance analysis task.
+
+    Args:
+        task_type: Task type string
+
+    Returns:
+        True if this is an analysis task (starts with 'analysis:')
+    """
+    return task_type.startswith("analysis:")
+
+
+def extract_analysis_framework(task_type: str) -> str:
+    """
+    Extract analysis framework from task type.
+
+    Args:
+        task_type: Full task type (e.g., 'analysis:fda')
+
+    Returns:
+        Analysis framework (e.g., 'fda')
+
+    Raises:
+        ValueError: If task_type is not an analysis task
+    """
+    if not is_analysis_task(task_type):
+        msg = f"Not an analysis task: {task_type}"
         raise ValueError(msg)
 
     return task_type.split(":", 1)[1]
