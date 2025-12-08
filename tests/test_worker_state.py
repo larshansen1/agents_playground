@@ -593,9 +593,9 @@ def test_handler_naming_convention():
     sm = WorkerStateMachine(worker_id="test-structural-2")
     for state, handler in sm.handlers.items():
         expected = f"_handle_{state.name.lower()}"
-        assert (
-            handler.__name__ == expected
-        ), f"Handler for {state} named {handler.__name__}, expected {expected}"
+        assert handler.__name__ == expected, (
+            f"Handler for {state} named {handler.__name__}, expected {expected}"
+        )
 
 
 def test_run_dispatch_complexity():

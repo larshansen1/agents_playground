@@ -78,9 +78,9 @@ class TestInvariants:
 
         for decision in decisions:
             alternatives = decision.get("alternatives", [])
-            assert (
-                len(alternatives) >= 1
-            ), f"Decision {decision['decision_point']} has no alternatives (INV-2 violated)"
+            assert len(alternatives) >= 1, (
+                f"Decision {decision['decision_point']} has no alternatives (INV-2 violated)"
+            )
 
     def test_inv3_violation_has_severity(self):
         """INV-3: All violations must have a severity assigned."""
@@ -95,9 +95,9 @@ class TestInvariants:
         violations = [f for f in findings if f["status"] == "VIOLATION"]
 
         for violation in violations:
-            assert (
-                violation["severity"] is not None
-            ), f"Violation {violation['check_id']} has no severity (INV-3 violated)"
+            assert violation["severity"] is not None, (
+                f"Violation {violation['check_id']} has no severity (INV-3 violated)"
+            )
             assert violation["severity"] in [
                 "CRITICAL",
                 "MAJOR",
@@ -116,12 +116,12 @@ class TestInvariants:
         findings = result["output"]["findings"]
 
         for finding in findings:
-            assert (
-                "evidence" in finding
-            ), f"Finding {finding['check_id']} has no evidence field (INV-4 violated)"
-            assert (
-                finding["evidence"] is not None
-            ), f"Finding {finding['check_id']} evidence is None"
+            assert "evidence" in finding, (
+                f"Finding {finding['check_id']} has no evidence field (INV-4 violated)"
+            )
+            assert finding["evidence"] is not None, (
+                f"Finding {finding['check_id']} evidence is None"
+            )
             assert len(finding["evidence"]) > 0, f"Finding {finding['check_id']} evidence is empty"
 
     def test_inv5_finding_cites_valid_guideline(self):
@@ -136,9 +136,9 @@ class TestInvariants:
         valid_rules = ["R06", "R11"]  # MVP rules
 
         for finding in findings:
-            assert (
-                finding["rule_id"] in valid_rules
-            ), f"Finding cites invalid rule: {finding['rule_id']} (INV-5 violated)"
+            assert finding["rule_id"] in valid_rules, (
+                f"Finding cites invalid rule: {finding['rule_id']} (INV-5 violated)"
+            )
 
     def test_inv7_confidence_in_valid_range(self):
         """INV-7: Confidence scores must be in range [0.0, 1.0]."""
@@ -153,15 +153,15 @@ class TestInvariants:
 
         for finding in findings:
             conf = finding["confidence"]
-            assert (
-                0.0 <= conf <= 1.0
-            ), f"Finding {finding['check_id']} confidence {conf} not in [0.0, 1.0] (INV-7 violated)"
+            assert 0.0 <= conf <= 1.0, (
+                f"Finding {finding['check_id']} confidence {conf} not in [0.0, 1.0] (INV-7 violated)"
+            )
 
         for decision in decisions:
             conf = decision["confidence"]
-            assert (
-                0.0 <= conf <= 1.0
-            ), f"Decision {decision['decision_point']} confidence {conf} not in [0.0, 1.0]"
+            assert 0.0 <= conf <= 1.0, (
+                f"Decision {decision['decision_point']} confidence {conf} not in [0.0, 1.0]"
+            )
 
 
 # ============================================================================
@@ -186,9 +186,9 @@ class TestIntegration:
         result2 = checker.execute({"parsed_spec": parsed_spec, "ruleset_id": "FDA-DK-2024-1.0"})
 
         findings = result2["output"]["findings"]
-        assert (
-            result2["output"]["summary"]["violations"] == 0
-        ), "Compliant spec should have no violations"
+        assert result2["output"]["summary"]["violations"] == 0, (
+            "Compliant spec should have no violations"
+        )
 
         # Phase 3: SeverityAssessor
         assessor = SeverityAssessorAgent()
@@ -230,9 +230,9 @@ class TestIntegration:
         result2 = checker.execute({"parsed_spec": parsed_spec, "ruleset_id": "FDA-DK-2024-1.0"})
 
         findings = result2["output"]["findings"]
-        assert (
-            result2["output"]["summary"]["violations"] > 0
-        ), "Non-compliant spec should have violations"
+        assert result2["output"]["summary"]["violations"] > 0, (
+            "Non-compliant spec should have violations"
+        )
 
         # Verify violations have proper structure
         violations = [f for f in findings if f["status"] == "VIOLATION"]
@@ -261,9 +261,9 @@ class TestIntegration:
             }
         )
 
-        assert (
-            result4["output"]["compliance_score"] < 1.0
-        ), "Non-compliant spec should have <100% score"
+        assert result4["output"]["compliance_score"] < 1.0, (
+            "Non-compliant spec should have <100% score"
+        )
         assert result4["output"]["summary"]["violations"] > 0
 
     def test_findings_queryable_by_severity(self):
@@ -285,9 +285,9 @@ class TestIntegration:
 
         # Verify each severity group
         for sev, group in by_severity.items():
-            assert all(
-                f["severity"] == sev for f in group
-            ), f"Findings with severity {sev} not properly filtered"
+            assert all(f["severity"] == sev for f in group), (
+                f"Findings with severity {sev} not properly filtered"
+            )
 
 
 # ============================================================================
@@ -392,7 +392,7 @@ class TestDecisionAudit:
 
         for decision in decisions:
             reasoning = decision["selected_reasoning"]
-            assert (
-                reasoning is not None
-            ), f"Decision {decision['decision_point']} has null reasoning"
+            assert reasoning is not None, (
+                f"Decision {decision['decision_point']} has null reasoning"
+            )
             assert len(reasoning) > 0, f"Decision {decision['decision_point']} has empty reasoning"
